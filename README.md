@@ -4,7 +4,7 @@ Whenever speed and size matters UTxQuantico or UTxQ gives you an edge in your de
 **(WIP)** :- Indicates Work in progress
 
 ## Key Features of UTxQ:-
-- Easy to Learn: Anyone can get familiar to UTxQ in less than an hour
+- Beginner-Friendly: Anyone can get familiar to UTxQ in less than an hour
 - Ultra-Fast Compilation: ~100k loc/s (Target:- ~1.2 million loc/s) 
 - Ultra-Light: CPU usage within 3% of C
 - Easy dev environment setup: UTxQ can compile itself in less than a second
