@@ -31,7 +31,7 @@ Currently Work in progress but can follow above mentioned instructions after ins
 If you want to develop UTxQ itself then it is required to have a C compiler (GCC or Clang) installed. For first time compilation and later on the built binary can be used to compile the code written in UTxQ.   
 
 # Contributing:-
-Please thoroughly understand the Code Structure of the project explained in [CONTRIBUTING.md](docs/CONTRIBUTING.md) before any changes in code otherwise  the code may break and you will no longer be able to use UTxQ to build itself.
+Please thoroughly understand the Code Structure of the project explained in [CONTRIBUTING.md](UTxQDocs/CONTRIBUTING.md) before any changes in code otherwise  the code may break and you will no longer be able to use UTxQ to build itself.
 ## Tasks to be Accomplished:-
    :star: Complete the features marked (WIP) 
 
