@@ -3,12 +3,11 @@
 The code of the `UTxQCompiler` and `UTxQlib` is very simple and readable for anyone who has prior experience with python, Go or Rust. `UTxQ` is an open source language and aims to develop under Nation of Developers of all levels. Please note that the name `Quantico` comes from word `Quantum` meaning Ultra Small Particles which brings a cool feature of Ultra-Light Compiler which works as fast as moving Electrons. Therefore, it is requested to all contributers to keep these ideas constant in their code.    
 
 
-The code for UTxQCompiler resides in  `[UTxQCompiler/](UTxQCompiler/)`
+The code for UTxQCompiler resides in  [UTxQCompiler/](../UTxQCompiler/)
 
 ToDo:- Create a directory Structure flowchart here. 
 
-Currently the following files are present in `[UTxQCompiler/](UTxQCompiler/)'
-/
+Currently the following files are present in [UTxQCompiler/](../UTxQCompiler/)
 1. `xQMain.xq` The entry point.
 - UTxQ figures out the build mode.
 - Constructs the UTxQCompiler object (`struct UTxQ`).
