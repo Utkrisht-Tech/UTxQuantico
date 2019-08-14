@@ -34,6 +34,7 @@ enum Token {
 	STAR           // *
 	SLASH          // /
 	PERCENTAGE     // %
+	STSTAR				 // **
   // Logical Operators
 	XOR            // ^
 	PIPE           // |
@@ -60,7 +61,7 @@ enum Token {
 	HASH           // #
 	DOLLAR         // $
   AT             // @
-	ARROW          // ->
+	ARROW          // =>
   BSLASH         // \
 
 	// Assignment Operators
@@ -83,7 +84,7 @@ enum Token {
 	MLINE_COMMENT_START
 	MLINE_COMMENT_END
 
-	NULL
+	NEWLINE
 
   TYPE_IGNORE
   TYPE_COMMENT
@@ -157,10 +158,10 @@ fn build_token_str() []string {
 	mut l := [''; NoOfTokens]
 	l[Token.keywords_top] = ''
 	l[Token.keywords_bottom] = ''
-	l[Token.EOF] = '.eof'
-	l[Token.NAME] = '.name'
-	l[Token.NUMBER] = '.number'
-	l[Token.STRING] = 'STR'
+	l[Token.EOF] = '.EOF'
+	l[Token.NAME] = '.NAME'
+	l[Token.NUMBER] = '.NUMBER'
+	l[Token.STRING] = '.STRING'
 	l[Token.CHAR] = '.chartk'
 
   l[Token.DOT] = '.'
@@ -180,6 +181,7 @@ fn build_token_str() []string {
 	l[Token.STAR] = '*'
 	l[Token.SLASH] = '/'
 	l[Token.PERCENTAGE] = '%'
+	l[Token.STSTAR] = '**'
 
 	l[Token.XOR] = '^'
   l[Token.PIPE] = '|'
@@ -224,7 +226,7 @@ fn build_token_str() []string {
 	l[Token.SLINE_COMMENT] = '//'
 	l[Token.MLINE_COMMENT_START] = '/*'
 	l[Token.MLINE_COMMENT_END] = '*\'
-	l[Token.NULL] = 'NULL'
+	l[Token.NEWLINE] = 'NL'
 
 	l[Token.key_as] = 'as'
 	l[Token.key_assert] = 'assert'
