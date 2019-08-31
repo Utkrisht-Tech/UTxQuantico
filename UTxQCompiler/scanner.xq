@@ -30,12 +30,13 @@ mut:
 fn new_scanner(file_path string) *Scanner {
   // Check if file exists
   if !os.file_exists(file_path) {
-		panic('"$file_path" doesn\'t exist')
+		cerror('"$file_path" doesn\'t exist')
 	}
 
   // Check if file is readable
 	mut raw_text := os.read_file(file_path) or {
-		panic('scanner: failed to open "$file_path"')
+		cerror('scanner: failed to open "$file_path"')
+		return 0
 	}
 
 	// Byte Order Mark Check , See wikipedia for more info
@@ -153,6 +154,9 @@ fn (sc mut Scanner) identify_dec_number() string {
 		for sc.pos_x < sc.text.len && sc.text[sc.pos_x].is_digit() {
 			sc.pos_x++
 		}
+		if !sc.inside_string && sc.pos_x < sc.text.len && sc.text[sc.pos_x] == `f` {
+						sc.error('no `f` is needed for floats')
+					}
 	}
 
 	// scan exponential part
@@ -272,7 +276,7 @@ fn (sc mut Scanner) scan() ScanRes {
 		// at the next ', skip it
 		if sc.is_in_string {
 			if next_char == `\'` {
-				sc.pos_x++
+				sc.dollar_end = true
 				sc.dollar_start = false
 				sc.inside_string = false
 			}
@@ -451,7 +455,7 @@ fn (sc mut Scanner) scan() ScanRes {
 		// TODO allow double quotes
 		// case `""`:
 		// return scan_res(.STRING, sc.ident_string())
-	case `\``:
+	case `\``: // ` // apostrophe balance comment. do not remove
 		return scan_res(.CHAR, sc.identify_char())
 	case `\r`:
 		if nextch == `\n` {
@@ -590,10 +594,41 @@ fn (sc mut Scanner) scan() ScanRes {
 	return scan_res(.EOF, '')
 }
 
+fn (sc &Scanner) find_current_line_start_position() int {
+	if sc.pos_x >= sc.text.len {
+		return sc.pos_x
+	}
+	mut linestart := sc.pos_x
+	for {
+		if linestart <= 0  {break}
+		if sc.text[linestart] == 10 || sc.text[linestart] == 13 { break }
+		linestart--
+	}
+		return linestart
+}
+
 fn (sc &Scanner) error(message string) {
-	file := sc.file_path.all_after('/')
-	println('$file:${sc.line_no_y + 1} $msg')
+	fullpath := os.realpath( sc.file_path )
+	column := sc.pos_x - sc.find_current_line_start_position()
+	// The filepath:line:col: format is the default C compiler
+	// error output format. It allows editors and IDE's like
+	// emacs to quickly find the errors in the output
+	// and jump to their source with a keyboard shortcut.
+	// Using only the filename leads to inability of IDE/editors
+	// to find the source file, when it is in another folder.
+	println('${fullpath}:${sc.line_no_y + 1}:$column: $message')
 	exit(1)
+}
+
+fn (sc Scanner) count_symbol_before(p int, sym byte) int {
+  mut count := 0
+  for i:=p; i>=0; i-- {
+    if sc.text[i] != sym {
+      break
+    }
+    count++
+  }
+  return count
 }
 
 // println('array out of bounds $idx len=$a.len')
@@ -628,14 +663,14 @@ fn (sc mut Scanner) identify_string() string {
 			sc.error('0 character in a string literal')
 		}
 		// ${var}
-		if ch == `{` && prevch == `$` {
+		if ch == `{` && prevch == `$` && sc.count_symbol_before(sc.pos_x-2, `\\`) % 2 == 0 {
 			sc.is_in_string = true
 
 			sc.pos_x -= 2     // Make sc.pos_x point to $ at the next step
 			break
 		}
 		// $var
-		if (ch.is_letter() || ch == `_`) && prevch == `$` {
+		if (ch.is_letter() || ch == `_`) && prevch == `$` && sc.count_symbol_before(sc.pos_x-2, `\\`) % 2 == 0 {
 			sc.is_in_string = true
 			sc.dollar_start = true
 			sc.pos_x -= 2
@@ -671,6 +706,7 @@ fn (sc mut Scanner) identify_char() string {
 		}
 		double_slash := sc.expect('\\\\', sc.pos_x - 2)
 		if sc.text[sc.pos_x] == `\`` && (sc.text[sc.pos_x - 1] != dslash || double_slash) {
+		// ` // apostrophe balance comment. do not remove
 			if double_slash {
 				len++
 			}
@@ -770,6 +806,7 @@ fn (sc mut Scanner) get_opening_bracket() int {
 			parentheses--
 		}
 		if sc.text[pos] == `\'` && sc.text[pos - 1] != `\\` && sc.text[pos - 1] != `\`` {
+			// ` // apostrophe balance comment. do not remove
 			is_in_string = !is_in_string
 		}
 		if parentheses == 0 {

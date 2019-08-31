@@ -17,13 +17,14 @@ mut:
 	generic_fns            []GenFnTable //map[string]GenFnTable // generic_fns['listen_and_serve'] == ['Blog', 'Forum']
 	file_imports           []ParsedImportsTable // List of file Imports scoped to the parsed file
 	build_flags            []string //  ['-framework DotNet', '-WebGL']
-	fn_count               int atomic
+	fn_count               int // atomic
 	is_obfuscated          bool
   obf_ids                map[string]int
 }
 
 struct GenFnTable {
 	fn_name string
+mut:
 	types   []string
 }
 
@@ -43,17 +44,49 @@ enum AccessMod {
 	pubDMUT        // Public and Dual Mutable (NOT Safe Always)
 }
 
+enum TypeCategory {
+  builtin
+	struct
+	fn
+	interface // 2
+	enum
+	union
+	c_struct // 5
+	c_typedef
+}
+
+struct Var {
+mut:
+  typ             string
+	name            string
+	is_arg          bool
+	is_const        bool
+	args            []Var // function args
+	attr            string //  [json] etc
+	is_mut          bool
+	is_alloc        bool
+	ptr             bool
+	ref             bool
+	parent_fn       string // Variables can only be defined in functions
+	mod             string // module where this var is stored
+	line_no_y       int
+	access_mod      AccessMod
+	is_global       bool // __global (translated from C only)
+	is_used         bool
+	is_changed      bool
+	scope_level     int
+}
+
 struct Type {
 mut:
 	mod            string
 	name           string
+  cat            TypeCategory
 	fields         []Var
 	methods        []Fn
 	parent         string
 	function       Fn // For cat == FN (type myfn fn())
-	is_c           bool // C.FI.le
-	is_interface   bool
-	is_enum        bool
+	is_c           bool // 'C.file'
 	enum_vals      []string
 	gen_types      []string
 	// Shadow Types are not defined previously but are known to exist.
@@ -61,6 +94,12 @@ mut:
 	// This information is needed in the first CheckPoint.
 	is_shadow      bool
 	gen_str	       bool  // needs `.str()` method generation
+}
+
+struct TypeNode {
+mut:
+  next &TypeNode
+  typ Type
 }
 
 // For debugging types
@@ -88,15 +127,48 @@ const (
 	CReserved = [
 		'exit',
 		'unix',
-		'print',
-		'ok',
+		//'print',
+		//'ok',
 		'error',
 		'malloc',
 		'calloc',
-		'char',
 		'free',
 		'panic',
-		'register'
+    // Complete list of C reserved words, from: https://en.cppreference.com/w/c/keyword
+		'auto',
+		'break',
+		'case',
+		'char',
+		'const',
+		'continue',
+		'default',
+		'do',
+		'double',
+		'else',
+		'enum',
+		'extern',
+		'float',
+		'for',
+		'goto',
+		'if',
+		'inline',
+		'int',
+		'long',
+		'register',
+		'restrict',
+		'return',
+		'short',
+		'signed',
+		'sizeof',
+		'static',
+		'struct',
+		'switch',
+		'typedef',
+		'union',
+		'unsigned',
+		'void',
+		'volatile',
+		'while',
 	]
 
 )
@@ -165,10 +237,10 @@ fn new_table(is_obfuscated bool) *Table {
 	t.register_type('voidptr')
 	t.register_type('T')
 	t.register_type('va_list')
-	t.register_const('stdin', 'int', 'main', false)
-	t.register_const('stdout', 'int', 'main', false)
-	t.register_const('stderr', 'int', 'main', false)
-	t.register_const('errno', 'int', 'main', false)
+	t.register_const('stdin', 'int', 'main')
+	t.register_const('stdout', 'int', 'main')
+	t.register_const('stderr', 'int', 'main')
+	t.register_const('errno', 'int', 'main')
 	t.register_type_with_parent('map_string', 'map')
 	t.register_type_with_parent('map_int', 'map')
 	return t
@@ -217,12 +289,11 @@ fn (table &dataTable) known_mod(mod string) bool {
 	return mod in table.modules
 }
 
-fn (t mut dataTable) register_const(name, typ, mod string, is_imported bool) {
+fn (t mut dataTable) register_const(name, typ, mod string) {
 	t.consts << Var {
 		name: name
 		typ: typ
 		is_const: true
-		is_import_const: is_imported
 		mod: mod
 	}
 }
@@ -346,6 +417,7 @@ fn (t mut Type) add_field(name, typ string, is_mutable bool, attr string, access
 		typ: typ
 		is_mutable: is_mutable
 		attr: attr
+    parent_fn: t.name   // Name of the parent type
 		access_mod: access_mod
 	}
 	t.fields << Q
@@ -489,11 +561,9 @@ fn (xQP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
 		return true
 	}
 	// Todo void* allows everything right now
-	if got=='void*' || expected=='void*' {
-		// if !xQP.builtin_mod {
-		if xQP.pref.is_play {
-			return false
-		}
+	if got=='void*' || expected=='void*'
+  {// || got == 'cvoid' || expected == 'cvoid' {
+
 		return true
 	}
 	// TODO only allow numeric consts to be assigned to bytes, and
@@ -529,21 +599,20 @@ fn (xQP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
 		return true
 	}
 	// NsColor* return 0
-	if !xQP.pref.is_play {
-		if expected.ends_with('*') && got == 'int' {
-			return true
-		}
-		// if got == 'T' || got.contains('<T>') {
-		// return true
-		// }
-		// if expected == 'T' || expected.contains('<T>') {
-		// return true
-		// }
-		// Allow pointer arithmetic
-		if expected=='void*' && got=='int' {
-			return true
-		}
+	if expected.ends_with('*') && got == 'int' {
+		return true
 	}
+	// if got == 'T' || got.contains('<T>') {
+	// return true
+	// }
+	// if expected == 'T' || expected.contains('<T>') {
+	// return true
+	// }
+	// Allow pointer arithmetic
+	if expected=='void*' && got=='int' {
+		return true
+	}
+
 	expected = expected.replace('*', '')
 	got = got.replace('*', '')
 	if got != expected {
@@ -596,12 +665,12 @@ fn type_default(typ string) string {
 	}
 	// User struct defined in another module.
 	if typ.contains('__') {
-		return 'STRUCT_DEFAULT_VALUE'
+		return '{0}'
 	}
 	// Default values for other types are not needed because of mandatory initialization
 	switch typ {
 	case 'bool': return '0'
-	case 'string': return 'tos("", 0)'
+	case 'string': return 'tos((byte *)"", 0)'
 	case 'i8': return '0'
 	case 'i16': return '0'
 	case 'i32': return '0'
@@ -618,13 +687,13 @@ fn type_default(typ string) string {
 	case 'byteptr': return '0'
 	case 'voidptr': return '0'
 	}
-	return 'STRUCT_DEFAULT_VALUE'
+	return '{0}'
 }
 
 // TODO PERF O(n)
 fn (t &dataTable) is_interface(name string) bool {
 	for typ in t.types {
-		if typ.is_interface && typ.name == name {
+		if typ.cat == .interface && typ.name == name {
 			return true
 		}
 	}
@@ -741,7 +810,8 @@ fn (t mut dataTable) fn_gen_types(fn_name string) []string {
 			return f.types
 		}
 	}
-	panic('function $fn_name not found')
+  cerror('function $fn_name not found')
+	return []string
 }
 
 // `foo<Bar>()`
@@ -758,7 +828,7 @@ fn (t mut dataTable) register_generic_fn_type(fn_name, typ string) {
 
 fn (xQP mut Parser) typ_to_format(typ string, level int) string {
 	t := xQP.table.find_type(typ)
-	if t.is_enum {
+	if t.t.cat == .enum {
 		return '%d'
 	}
 	switch typ {
@@ -819,7 +889,7 @@ fn (table &dataTable) qualify_module(mod string, file_path string) string {
 fn new_file_import_table(file_path string) *ParsedImportsTable {
 	return &ParsedImportsTable{
 		file_path: file_path
-		imports:   map[string]string{}
+		imports:   map[string]string
 	}
 }
 
@@ -833,7 +903,7 @@ fn (pit mut ParsedImportsTable) register_import(mod string) {
 
 fn (pit mut ParsedImportsTable) register_alias(alias string, mod string) {
 	if alias in pit.imports {
-		panic('Cannot import $mod as $alias: import name $alias already in use in "${pit.file_path}".')
+		cerror('Cannot import $mod as $alias: import name $alias already in use in "${pit.file_path}".')
 	}
 	if mod.contains('.internal.') {
 		mod_parts := mod.split('.')
@@ -844,7 +914,7 @@ fn (pit mut ParsedImportsTable) register_alias(alias string, mod string) {
 		}
 		internal_parent := internal_mod_parts.join('.')
 		if !pit.module_name.starts_with(internal_parent) {
-			panic('module $mod can only be imported internally by libraries.')
+			cerror('module $mod can only be imported internally by libraries.')
 		}
 	}
 	pit.imports[alias] = mod
@@ -866,3 +936,15 @@ fn (pit &ParsedImportsTable) is_aliased(mod string) bool {
 fn (pit &ParsedImportsTable) resolve_alias(alias string) string {
 	return pit.imports[alias]
 }
+
+fn (t &Type) contains_field_type(typ string) bool {
+				if !t.name[0].is_capital() {
+					return false
+				}
+				for field in t.fields {
+					if field.typ == typ {
+						return true
+					}
+				}
+				return false
+			}
