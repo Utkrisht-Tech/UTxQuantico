@@ -11,7 +11,7 @@ struct dataTable {
 mut:
   modules                []string // List of all modules registered by the application
   imports                []string // List of all imported libraries
-  types                  []Type
+  typesmap               map[string]Type
 	consts                 []Var
 	fns                    map[string]Fn
 	generic_fns            []GenFnTable //map[string]GenFnTable // generic_fns['listen_and_serve'] == ['Blog', 'Forum']
@@ -47,12 +47,13 @@ enum AccessMod {
 enum TypeCategory {
   builtin
 	struct
-	fn
-	interface // 2
+	function // 2
+	interface
 	enum
-	union
-	c_struct // 5
+	union    // 5
+	c_struct
 	c_typedef
+  array
 }
 
 struct Var {
@@ -191,8 +192,8 @@ fn (t &dataTable) debug_fns() string {
 // fn (types array_Type) print_to_file(f string)  {
 // }
 const (
-	number_types = ['number', 'int', 'i8', 'u8', 'i16', 'u16', 'i32', 'u32', 'byte', 'i64', 'u64', 'f32', 'f64']
-	float_types  = ['f32', 'f64']
+  number_types = ['number', 'int', 'i8', 'i16', 'u16', 'u32', 'byte', 'i64', 'u64', 'f32', 'f64']
+  float_types  = ['f32', 'f64']
 )
 
 fn is_number_type(typ string) bool {
@@ -207,24 +208,17 @@ fn is_primitive_type(typ string) bool {
 	return is_number_type(typ) || typ == 'string'
 }
 
-fn new_table(is_obfuscated bool) *Table {
+fn new_table(is_obfuscated bool) &dataTable {
 	mut t := &dataTable {
-		obf_ids: map[string]int{}
-		fns: map[string]Fn{}
-		//generic_fns: map[string]GenFnTable{}
-		generic_fns: []GenFnTable
 		is_obfuscated: is_obfuscated
-		file_imports: []ParsedImportsTable
 	}
 	t.register_type('int')
 	t.register_type('size_t')
 	t.register_type_with_parent('i8', 'int')
-	t.register_type_with_parent('u8', 'u32')
+	t.register_type_with_parent('byte', 'int')
 	t.register_type_with_parent('i16', 'int')
 	t.register_type_with_parent('u16', 'u32')
-	t.register_type_with_parent('i32', 'int')
 	t.register_type_with_parent('u32', 'int')
-	t.register_type_with_parent('byte', 'int')
 	t.register_type_with_parent('i64', 'int')
 	t.register_type_with_parent('u64', 'u32')
 	t.register_type('byteptr')
@@ -320,13 +314,10 @@ fn (table &dataTable) known_type(typ_ string) bool {
 	if typ.ends_with('*') && !typ.contains(' ') {
 		typ = typ.left(typ.len - 1)
 	}
-	for t in table.types {
-		if t.name == typ && !t.is_shadow {
-			return true
-		}
-	}
-	return false
+	t := table.typesmap[typ]
+	return t.name.len > 0 && !t.is_shadow
 }
+
 
 fn (t &dataTable) find_fn(name string) Fn {
 	f := t.fns[name]
@@ -351,17 +342,10 @@ fn (t mut dataTable) register_type(typ string) {
 	if typ.len == 0 {
 		return
 	}
-	for typ2 in t.types {
-		if typ2.name == typ {
-			return
+	if typ in t.typesmap {
+		return
 		}
-	}
-	// if t.types.filter( _.name == typ.name).len > 0 {
-	// return
-	// }
-	t.types << Type {
-		name: typ
-	}
+	t.typesmap[typ] = Type{name:typ}
 }
 
 fn (xQP mut Parser) register_type_with_parent(strtyp, parent string) {
@@ -377,19 +361,7 @@ fn (t mut dataTable) register_type_with_parent(typ, parent string) {
 	if typ.len == 0 {
 		return
 	}
-	// if t.types.filter(_.name == typ) > 0
-	for typ2 in t.types {
-		if typ2.name == typ {
-			return
-		}
-	}
-	/*
-mut mod := ''
-if parent == 'array' {
-mod = 'builtin'
-}
-*/
-	t.types << Type {
+	t.typesmap[typ] = Type {
 		name: typ
 		parent: parent
 		//mod: mod
@@ -400,27 +372,31 @@ fn (t mut dataTable) register_type2(typ Type) {
 	if typ.name.len == 0 {
 		return
 	}
-	for typ2 in t.types {
-		if typ2.name == typ.name {
-			return
-		}
-	}
-	t.types << typ
+	t.typesmap[typ.name] = typ
 }
 
-fn (t mut Type) add_field(name, typ string, is_mutable bool, attr string, access_mod AccessMod) {
-	// if t.name == 'Parser' {
-	// println('adding field $name')
-	// }
-	Q := Var {
-		name: name
-		typ: typ
+fn (t mut dataTable) rewrite_type(typ Type) {
+	if typ.name.len == 0 {
+		return
+	}
+	t.typesmap[typ.name]  = typ
+}
+
+fn (table mut dataTable) add_field(type_name, field_name, field_type string, is_mutable bool, attr string, access_mod AccessMod) {
+	if type_name == '' {
+		print_backtrace()
+		cerror('add_field: empty type')
+	}
+	mut t := table.typesmap[type_name]
+	t.fields << Var {
+		name: field_name
+		typ: field_type
 		is_mutable: is_mutable
 		attr: attr
-    parent_fn: t.name   // Name of the parent type
+		parent_fn: type_name   // Name of the parent type
 		access_mod: access_mod
 	}
-	t.fields << Q
+	table.typesmap[type_name] = t
 }
 
 fn (t &Type) has_field(name string) bool {
@@ -455,13 +431,16 @@ fn (table &dataTable) find_field(typ &Type, name string) Var {
 	return field
 }
 
-fn (t mut Type) add_method(f Fn) {
-	// if t.name.contains('Parser') {
-	// println('!!!add_method() $f.name to $t.name len=$t.methods.len cap=$t.methods.cap')
-	// }
+fn (table mut dataTable) add_method(type_name string, f Fn) {
+	if type_name == '' {
+		print_backtrace()
+		cerror('add_method: empty type')
+	}
+	mut t := table.typesmap[type_name]
 	t.methods << f
-	// println('end add_method()')
+	table.typesmap[type_name] = t
 }
+
 
 fn (t &Type) has_method(name string) bool {
 	method := t.find_method(name)
@@ -499,7 +478,8 @@ fn (t &Type) find_method(name string) Fn {
 }
 
 /*
-fn (t mut Type) add_gen_type(type_name string) {
+// TODO
+fn (t mutt Type) add_gen_type(type_name string) {
 	// println('add_gen_type($s)')
 	if t.gen_types.contains(type_name) {
 		return
@@ -508,33 +488,30 @@ fn (t mut Type) add_gen_type(type_name string) {
 }
 */
 
-fn (xQP &Parser) find_type(name string) &Type {
-	typ := p.table.find_type(name)
-	if typ.name.len == 0 {
-		return p.table.find_type(p.prepend_mod(name))
+fn (xP &Parser) find_type(name string) Type {
+	typ := xP.table.find_type(name)
+	if typ.name == '' {
+		return xP.table.find_type(xP.prepend_mod(name))
 	}
 	return typ
 }
 
-fn (t &dataTable) find_type(name_ string) *Type {
+fn (t &dataTable) find_type(name_ string) Type {
 	mut name := name_
 	if name.ends_with('*') && !name.contains(' ') {
 		name = name.left(name.len - 1)
 	}
-	// TODO PERF use map
-	for i, typ in t.types {
-		if typ.name == name {
-			return &t.types[i]
-		}
+	if !(name in t.typesmap) {
+		return Type{}
 	}
-	return &Type{}
+	return t.typesmap[name]
 }
 
-fn (xQP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
+fn (xP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
 	mut got := got_
 	mut expected := expected_
-	xQP.log('check types got="$got" exp="$expected"  ')
-	if xQP.pref.translated {
+	xP.log('check types got="$got" exp="$expected"  ')
+	if xP.pref.translated {
 		return true
 	}
 	// Allow ints to be used as floats
@@ -618,7 +595,7 @@ fn (xQP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
 	if got != expected {
 		// Interface check
 		if expected.ends_with('er') {
-			if xQP.satisfies_interface(expected, got, throw) {
+			if xP.satisfies_interface(expected, got, throw) {
 				return true
 			}
 		}
@@ -626,28 +603,29 @@ fn (xQP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
 			return false
 		}
 		else {
-			xQP.error('expected type `$expected`, but got `$got`')
+			xP.error('expected type `$expected`, but got `$got`')
 		}
 	}
 	return true
 }
 
 // throw by default
-fn (xQP mut Parser) check_types(got, expected string) bool {
-	return xQP._check_types(got, expected, true)
+fn (xP mut Parser) check_types(got, expected string) bool {
+	if xP.first_cp() { return true }
+	return xP._check_types(got, expected, true)
 }
 
-fn (xQP mut Parser) check_types_no_throw(got, expected string) bool {
-	return xQP._check_types(got, expected, false)
+fn (xP mut Parser) check_types_no_throw(got, expected string) bool {
+	return xP._check_types(got, expected, false)
 }
 
-fn (xQP mut Parser) satisfies_interface(interface_name, _typ string, throw bool) bool {
-	int_typ := xQP.table.find_type(interface_name)
-	typ := xQP.table.find_type(_typ)
+fn (xP mut Parser) satisfies_interface(interface_name, _typ string, throw bool) bool {
+	int_typ := xP.table.find_type(interface_name)
+	typ := xP.table.find_type(_typ)
 	for method in int_typ.methods {
 		if !typ.has_method(method.name) {
 			// if throw {
-			xQP.error('Type "$_typ" doesn\'t satisfy interface "$interface_name" (method "$method.name" is not implemented)')
+			xP.error('Type "$_typ" doesn\'t satisfy interface "$interface_name" (method "$method.name" is not implemented)')
 			// }
 			return false
 		}
@@ -673,9 +651,7 @@ fn type_default(typ string) string {
 	case 'string': return 'tos((byte *)"", 0)'
 	case 'i8': return '0'
 	case 'i16': return '0'
-	case 'i32': return '0'
 	case 'i64': return '0'
-	case 'u8': return '0'
 	case 'u16': return '0'
 	case 'u32': return '0'
 	case 'u64': return '0'
@@ -690,15 +666,14 @@ fn type_default(typ string) string {
 	return '{0}'
 }
 
-// TODO PERF O(n)
-fn (t &dataTable) is_interface(name string) bool {
-	for typ in t.types {
-		if typ.cat == .interface && typ.name == name {
-			return true
-		}
+fn (table &dataTable) is_interface(name string) bool {
+	if !(name in table.typesmap) {
+		return false
 	}
-	return false
+	t := table.typesmap[name]
+	return t.cat == .interface
 }
+
 
 // Do we have fn main()?
 fn (t &dataTable) main_exists() bool {
@@ -737,7 +712,7 @@ fn (table mut dataTable) cgen_name(f &Fn) string {
 	}
 	// Obfuscate but skip certain names
 	// TODO ugly, fix
-	if table.obfuscate && f.name != 'main' && f.name != 'WinMain' && f.mod != 'builtin' && !f.is_c &&
+	if table.is_obfuscated && f.name != 'main' && f.name != 'WinMain' && f.mod != 'builtin' && !f.is_c &&
 	f.mod != 'darwin' && f.mod != 'os' && !f.name.contains('window_proc') && f.name != 'gg__vec2' &&
 	f.name != 'build_token_str' && f.name != 'build_keys' && f.mod != 'json' &&
 	!name.ends_with('_str') && !name.contains('contains') {
@@ -785,14 +760,14 @@ fn (table &dataTable) cgen_name_type_pair(name, typ string) string {
 fn is_valid_int_const(val, typ string) bool {
 	x := val.int()
 	switch typ {
-	case 'byte', 'u8': return 0 <= x && x <= math.MaxU8
+	case 'byte': return 0 <= x && x <= math.MaxU8
 	case 'u16': return 0 <= x && x <= math.MaxU16
 	//case 'u32': return 0 <= x && x <= math.MaxU32
 	//case 'u64': return 0 <= x && x <= math.MaxU64
 	//////////////
 	case 'i8': return math.MinI8 <= x && x <= math.MaxI8
 	case 'i16': return math.MinI16 <= x && x <= math.MaxI16
-	case 'int', 'i32': return math.MinI32 <= x && x <= math.MaxI32
+	case 'int': return math.MinI32 <= x && x <= math.MaxI32
 	//case 'i64':
 		//x64 := val.i64()
 		//return i64(-(1<<63)) <= x64 && x64 <= i64((1<<63)-1)
@@ -826,31 +801,31 @@ fn (t mut dataTable) register_generic_fn_type(fn_name, typ string) {
 	}
 }
 
-fn (xQP mut Parser) typ_to_format(typ string, level int) string {
-	t := xQP.table.find_type(typ)
-	if t.t.cat == .enum {
+fn (xP mut Parser) typ_to_format(typ string, level int) string {
+	t := xP.table.find_type(typ)
+	if t.cat == .enum {
 		return '%d'
 	}
 	switch typ {
 	case 'string': return '%.*s'
 	//case 'bool': return '%.*s'
 	case 'ustring': return '%.*s'
-	case 'byte', 'bool', 'int', 'char', 'byte', 'i32', 'i16', 'i8': return '%d'
-	case 'u8', 'u16', 'u32': return '%u'
+	case 'byte', 'bool', 'int', 'char', 'byte', 'i16', 'i8': return '%d'
+	case 'u16', 'u32': return '%u'
 	case 'f64', 'f32': return '%f'
 	case 'i64': return '%lld'
 	case 'u64': return '%llu'
 	case 'byte*', 'byteptr': return '%s'
 		// case 'array_string': return '%s'
 		// case 'array_int': return '%s'
-	case 'void': xQP.error('cannot interpolate this value')
+	case 'void': xP.error('cannot interpolate this value')
 	default:
 		if typ.ends_with('*') {
 			return '%p'
 		}
 	}
 	if t.parent != '' && level == 0 {
-		return xQP.typ_to_format(t.parent, level+1)
+		return xP.typ_to_format(t.parent, level+1)
 	}
 	return ''
 }
@@ -886,7 +861,7 @@ fn (table &dataTable) qualify_module(mod string, file_path string) string {
 	return mod
 }
 
-fn new_file_import_table(file_path string) *ParsedImportsTable {
+fn new_file_import_table(file_path string) &ParsedImportsTable {
 	return &ParsedImportsTable{
 		file_path: file_path
 		imports:   map[string]string
@@ -947,4 +922,4 @@ fn (t &Type) contains_field_type(typ string) bool {
 					}
 				}
 				return false
-			}
+}

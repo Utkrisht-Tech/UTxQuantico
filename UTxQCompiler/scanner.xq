@@ -27,7 +27,7 @@ mut:
 	prev_tk                 Token
 }
 
-fn new_scanner(file_path string) *Scanner {
+fn new_scanner(file_path string) &Scanner {
   // Check if file exists
   if !os.file_exists(file_path) {
 		cerror('"$file_path" doesn\'t exist')

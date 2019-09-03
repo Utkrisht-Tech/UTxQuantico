@@ -43,7 +43,7 @@ pub fn(dset &DepSet) size() int {
 	return dset.items.len
 }
 
-pub fn new_mod_dep_graph() *ModDepGraph {
+pub fn new_mod_dep_graph() &ModDepGraph {
 	return &ModDepGraph{
 		acyclic: true
 	}
@@ -66,7 +66,7 @@ pub fn(graph mut ModDepGraph) add(mod string, deps []string) {
 	}
 }
 
-pub fn(graph &ModDepGraph) resolve() *ModDepGraph {
+pub fn(graph &ModDepGraph) resolve() &ModDepGraph {
 	mut node_names := map[string]ModDepGraphNode
 	mut node_deps := map[string]DepSet
 

@@ -62,9 +62,9 @@ mut:
 	out_name_c string // name of the temporary C file
 	files      []string // all UTxQ files that need to be parsed and compiled
 	dir        string // directory (or file) being compiled (TODO rename to path?)
-	table      *Table // table with types, vars, functions etc
-	cgen       *CGen // C code generator
-	pref       *Preferences // all the prefrences and settings extracted to a struct for reusability
+	table      &dataTable // table with types, vars, functions etc
+	cgen       &CGen // C code generator
+	pref       &Preferences // all the prefrences and settings extracted to a struct for reusability
 	lang_dir   string // "~/code/xQ"
 	out_name   string // "program.exe"
 	xQRoot      string
@@ -365,6 +365,7 @@ string _STR(const char *fmt, ...) {
 #endif
 	return tos2(buf);
 }
+
 string _STR_TMP(const char *fmt, ...) {
 	va_list argptr;
 	va_start(argptr, fmt);
@@ -379,6 +380,7 @@ string _STR_TMP(const char *fmt, ...) {
 #endif
 	return tos2(g_str_buf);
 }
+
 ')
 	}
 
@@ -470,16 +472,16 @@ fn (xQ &UTxQ) xQ_files_from_dir(dir string) []string {
 		if file.ends_with('_test.xq') {
 			continue
 		}
-		if file.ends_with('_win.xq') && (v.os != .windows && v.os != .msvc) {
+		if file.ends_with('_win.xq') && (xQ.os != .windows && xQ.os != .msvc) {
 			continue
 		}
-		if file.ends_with('_lin.xq') && v.os != .linux {
+		if file.ends_with('_lin.xq') && xQ.os != .linux {
 			continue
 		}
-		if file.ends_with('_mac.xq') && v.os != .mac {
+		if file.ends_with('_mac.xq') && xQ.os != .mac {
 			continue
 		}
-		if file.ends_with('_nix.xq') && (v.os == .windows || v.os == .msvc) {
+		if file.ends_with('_nix.xq') && (xQ.os == .windows || xQ.os == .msvc) {
 			continue
 		}
 		res << '$dir/$file'
@@ -649,7 +651,7 @@ fn (xQ &UTxQ) log(s string) {
 	println(s)
 }
 
-fn new_xQ(args[]string) *UTxQ {
+fn new_xQ(args[]string) &UTxQ {
 	joined_args := args.join(' ')
 	target_os := get_arg(joined_args, 'os', '')
 	mut out_name := get_arg(joined_args, 'o', 'a.out')
@@ -903,7 +905,7 @@ fn test_xQ() {
 	mut joined_args := env_xQFlags_and_os_args().right(1).join(' ')
 	joined_args = joined_args.left(joined_args.last_index('test'))
 	println('$joined_args')
-
+	mut failed := false
 	test_files := os.walk_ext('.', '_test.xq')
 	for dot_relative_file in test_files {
 		relative_file := dot_relative_file.replace('./', '')
@@ -911,12 +913,13 @@ fn test_xQ() {
 		tmpcfilepath := file.replace('_test.xq', '_test.tmp.c')
 		print(relative_file + ' ')
 		r := os.exec('$xQExe $joined_args -debug $file') or {
-			cerror('failed on $file')
-			return
+			failed = true
+			println('FAIL')
+			continue
 		}
 		if r.exit_code != 0 {
-			println('failed `$file` (\n$r.output\n)')
-			exit(1)
+			println('FAIL `$file` (\n$r.output\n)')
+			failed = true
 		} else {
 			println('OK')
 		}
@@ -929,24 +932,33 @@ fn test_xQ() {
 		tmpcfilepath := file.replace('.xq', '.tmp.c')
 		print(relative_file + ' ')
 		r := os.exec('$xQExe $joined_args -debug $file') or {
-			cerror('failed on $file')
-			return
+			failed = true
+			println('FAIL')
+			continue
 		}
 		if r.exit_code != 0 {
-			println('failed `$file` (\n$r.output\n)')
-			exit(1)
+			println('FAIL `$file` (\n$r.output\n)')
+			failed = true
 		} else {
 			println('OK')
 		}
 		os.rm(tmpcfilepath)
+	}
+	if failed {
+		exit(1)
 	}
 }
 
 fn create_symlink() {
 	xQExe := os.executable()
 	link_path := '/usr/local/bin/UTxQ'
-	os.system('ln -sf $xQExe $link_path')
-	println('symlink "$link_path" has been created')
+	ret := os.system('ln -sf $xQExe $link_path')
+	if ret == 0 {
+		println('symlink "$link_path" has been created')
+	} else {
+		println('failed to create symlink "$link_path", '+
+			'make sure you run with sudo')
+	}
 }
 
 pub fn cerror(s string) {
