@@ -3386,7 +3386,11 @@ fn (xP mut Parser) match_statement(is_expr bool) string {
 
 					return res_typ
 				} else {
-					xP.match_parse_statement_branch()
+					xP.returns = false
+					xP.check(.LCBR)
+
+					xP.genln('{ ')
+					xP.statements()
 					xP.returns = all_cases_return && xP.returns
 					return ''
 				}
@@ -3413,8 +3417,14 @@ fn (xP mut Parser) match_statement(is_expr bool) string {
 
 				return res_typ
 			} else {
+				xP.returns = false
 				xP.genln('else // default:')
-				xP.match_parse_statement_branch()
+
+				xP.check(.LCBR)
+
+				xP.genln('{ ')
+				xP.statements()
+
 				xP.returns = all_cases_return && xP.returns
 				return ''
 			}
@@ -3460,6 +3470,9 @@ fn (xP mut Parser) match_statement(is_expr bool) string {
 			xP.expected_type = ''
 
 			if xP.tk != .COMMA {
+				if got_comma {
+ 					xP.gen(') ')
+				}
 				break
 			}
 			xP.check(.COMMA)
@@ -3490,11 +3503,15 @@ fn (xP mut Parser) match_statement(is_expr bool) string {
 			xP.gen(')')
 		}
 		else {
-			xP.match_parse_statement_branch()
+			xP.returns = false
+			xP.check(.LCBR)
+
+			xP.genln('{ ')
+			xP.statements()
+
+			all_cases_return = all_cases_return && p.returns
 			// xP.gen(')')
 		}
-
-		all_cases_return = all_cases_return && xP.returns
 		i++
 	}
 
@@ -3506,13 +3523,6 @@ fn (xP mut Parser) match_statement(is_expr bool) string {
 	xP.returns = false // only get here when no default, so return is not guaranteed
 
 	return ''
-}
-
-fn (xP mut Parser) match_parse_statement_branch(){
-	xP.check(.LCBR)
-
-	xP.genln('{ ')
-	xP.statements()
 }
 
 fn (xP mut Parser) assert_statement() {

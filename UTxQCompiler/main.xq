@@ -193,11 +193,6 @@ fn main() {
 			os.mkdir(ModPath)
 		}
 	}
-	// No args? REPL
-	if args.len < 2 || (args.len == 2 && args[1] == '-') {
-		run_repl()
-		return
-	}
 	// Construct the UTxQ object from command line arguments
 	mut xQ := new_xQ(args)
 	if xQ.pref.is_verbose {
@@ -214,6 +209,12 @@ fn main() {
 		// for example for -repl usage, especially when piping lines to xQ
 		xQ.compile()
 		xQ.run_compiled_executable_and_exit()
+	}
+	
+	// No args? REPL
+	if args.len < 2 || (args.len == 2 && args[1] == '-') || 'runrepl' in args {
+		run_repl()
+		return
 	}
 
 	xQ.compile()
@@ -835,7 +836,6 @@ Options:
   -                 Read from stdin (Default; Interactive mode if in a tty)
   -h, help          Display this information.
   -v, version       Display compiler version.
-  -lib              Generate object file.
   -prod             Build an optimized executable.
   -o <file>         Place output into <file>.
   -obf              Obfuscate the resulting binary.
@@ -845,6 +845,7 @@ Options:
   fmt               Run xQFmt to format the source code.
   update            Update UTxQuantico.
   run               Build and execute a UTxQ program. You can add arguments after the file name.
+	build module      Compile a module into an object file.
 Files:
   <file>_test.xq     Test file.
 '
