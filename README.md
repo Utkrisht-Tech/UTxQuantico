@@ -1,8 +1,13 @@
+<img src="http://img.shields.io/liberapay/patrons/Utkrisht_Tech.svg?logo=liberapay">&nbsp;<img src="http://img.shields.io/liberapay/goal/Utkrisht_Tech.svg?logo=liberapay">
+
 # UTxQuantico
 Whenever speed and size matters UTxQuantico or UTxQ gives you an edge in your development cycle. The language provides ultimately high compiling speed with a compiler that is just &lt;1 MB in size. Please read the readme file for more cool features.
 
 **(WIP)** :- Indicates Work in progress
 
+# Show Your Support Through These Links:-
+[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U712S4P)
+<a href="https://liberapay.com/Utkrisht_Tech/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a>
 ## Key Features of UTxQ:-
 - Beginner-Friendly: Anyone can get familiar to UTxQ in less than an hour
 - Ultra-Fast Compilation: ~100k loc/s (Target:- ~1.2 million loc/s) 
