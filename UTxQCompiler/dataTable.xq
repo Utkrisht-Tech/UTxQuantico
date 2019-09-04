@@ -456,7 +456,9 @@ fn (table &dataTable) type_has_method(typ &Type, name string) bool {
 
 fn (table &dataTable) find_method(typ &Type, name string) Fn {
 	// println('TYPE HAS METHOD $name')
-	method := typ.find_method(name)
+	// method := typ.find_method(name)
+  t := table.typesmap[typ.name]
+  method := t.find_method(name)
 	if method.name.len == 0 && typ.parent.len > 0 {
 		parent := table.find_type(typ.parent)
 		return parent.find_method(name)
@@ -747,8 +749,8 @@ fn (table &dataTable) cgen_name_type_pair(name, typ string) string {
 			println('this should never happen')
 			exit(1)
 		}
-		str_args := T.func.str_args(table)
-		return '$T.func.typ (*$name)( $str_args /*FFF*/ )'
+		str_args := T.function.str_args(table)
+		return '$T.function.typ (*$name)( $str_args /*FFF*/ )'
 	}
 	// TODO tm hack, do this for all C struct args
 	else if typ == 'tm' {

@@ -206,7 +206,7 @@ fn build_token_str() []string {
 	l[Token.HASH] = '#'
 	l[Token.DOLLAR] = '$'
 	l[Token.AT] = '@'
-	l[Token.ARROW] = '->'
+	l[Token.ARROW] = '=>'
 	l[Token.BSLASH] = '\'
 
 	l[Token.ASSIGN] = '='

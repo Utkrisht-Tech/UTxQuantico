@@ -577,7 +577,7 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 		println(xQ.table.imports)
 	}
 	// graph deps
-	mut dep_graph := new_mod_dep_graph()
+	mut dep_graph := new_dep_graph()
 	dep_graph.from_import_tables(xQ.table.file_imports)
 	deps_resolved := dep_graph.resolve()
 	if !deps_resolved.acyclic {
@@ -901,7 +901,7 @@ fn test_xQ() {
 	args := env_xQFlags_and_os_args()
 	vexe := args[0]
 	// Pass args from the invocation to the test
-	// e.g. `xQ -g -os msvc test xQ` -> `$xQExe -g -os msvc $file`
+	// e.g. `xQ -g -os msvc test xQ` => `$xQExe -g -os msvc $file`
 	mut joined_args := env_xQFlags_and_os_args().right(1).join(' ')
 	joined_args = joined_args.left(joined_args.last_index('test'))
 	println('$joined_args')
