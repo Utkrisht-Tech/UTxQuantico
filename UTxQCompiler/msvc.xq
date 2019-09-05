@@ -215,7 +215,7 @@ struct ParsedFlag {
 	arg string
 }
 
-public fn (xQ mut UTxQ) cc_msvc() {
+public fn (xQ mut UTxQ) XCompiler_msvc() {
 	r := find_msvc() or {
 		// TODO: code reuse
 		if !xQ.pref.is_debug && xQ.out_name_c != 'UTxQ.c' && xQ.out_name_c != 'UTxQ_macos.c' {
@@ -331,6 +331,10 @@ public fn (xQ mut UTxQ) cc_msvc() {
 			// Which ever one of these is lowest we use
 			// TODO: we really shouldnt support all of these
 			mut lowest := base.index('-')
+			// dont break paths with hyphens
+			if lowest != 0  {
+				lowest = -1
+			}
 			for x in [base.index(' '), base.index(',')] {
 				if (x < lowest && x != -1) || lowest == -1 {
 					lowest = x

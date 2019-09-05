@@ -16,7 +16,7 @@ const (
 
 enum BuildMode {
 	// `xQ program.xq'
-	// Build user code only, and add pre-compiled xQLib (`cc program.o builtin.o os.o...`)
+	// Build user code only, and add pre-compiled xQLib (`XCompiler program.o builtin.o os.o...`)
 	default_mode
 	// `xQ -embed_xQLib program.xq`
 	// xQLib + user code in one file (slower compilation, but easier when working on xQLib and cross-compiling)
@@ -210,7 +210,7 @@ fn main() {
 		xQ.compile()
 		xQ.run_compiled_executable_and_exit()
 	}
-	
+
 	// No args? REPL
 	if args.len < 2 || (args.len == 2 && args[1] == '-') || 'runrepl' in args {
 		run_repl()
@@ -236,6 +236,10 @@ fn (xQ mut UTxQ) compile() {
 	// Add builtin parsers
 	for i, file in xQ.files {
 	//        xQ.parsers << xQ.new_parser(file)
+	}
+	if xQ.pref.is_verbose {
+		println('all .xq files before:')
+		println(xQ.files)
 	}
 	xQ.add_xQ_files_to_compile()
 	if xQ.pref.is_verbose {
@@ -323,7 +327,7 @@ fn (xQ mut UTxQ) compile() {
 		xQ.log('flags=')
 		println(xQ.table.flags)
 	}
-	xQ.cc()
+	xQ.XCompiler()
 }
 
 fn (xQ mut UTxQ) generate_main() {
@@ -512,7 +516,7 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 		dir = dir.all_before('/')
 	}
 	else {
-		// Add files from the dir user is compiling (only .xq files)
+		// Add .xq files from the directory being compiled
 		files := xQ.xQ_files_from_dir(dir)
 		for file in files {
 			user_files << file
@@ -602,17 +606,30 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 */
 		xQFiles := xQ.xQ_files_from_dir(mod_path)
 		for file in xQFiles {
-			if !file in xQ.files {
+			if !(file in xQ.files) {
 				xQ.files << file
 			}
 		}
 	}
-	// add remaining files (not modules)
-	for pit in xQ.table.file_imports {
-		//println('pit $pit.file_path')
-		if !pit.file_path in xQ.files {
-			xQ.files << pit.file_path
+	// Add remaining user files
+	mut j := 0
+	mut len := -1
+	for i, pit in xQ.table.file_imports {
+		// Don't add a duplicate; builtin files are always there
+		if pit.file_path in xQ.files || pit.module_name == 'builtin' {
+			continue
 		}
+		if len == -1 {
+			len = i
+		}
+		j++
+		// TODO remove this once imports work with .build
+		if xQ.pref.build_mode == .build && j >= len/2 {
+			break
+		}
+		//println(pit)
+		//println('pit $pit.file_path')
+		xQ.files << pit.file_path
 	}
 }
 
@@ -672,9 +689,11 @@ fn new_xQ(args[]string) &UTxQ {
 	if joined_args.contains('build module ') {
 		build_mode = .build
 		// xQ -lib ~/UTxQ/os => os.o
-		mod = os.dir(dir)
-		mod = mod.all_after('/')
-		println('Building module  "${mod}" dir="$dir"...')
+		//mod = os.dir(dir)
+		if dir.contains('/') {
+			mod = dir.all_after('/')
+		}
+		println('Building module "${mod}" (dir="$dir")...')
 		//out_name = '$TmpPath/xQLib/${base}.o'
 		out_name = mod + '.o'
 		// Cross compiling? Use separate dirs for each os
@@ -764,10 +783,11 @@ fn new_xQ(args[]string) &UTxQ {
 		println('Go to https://UTxQuantico.io to install UTxQuantico.')
 		exit(1)
 	}
+	//println('out_name:$out_name')
 	mut out_name_c := os.realpath( out_name ) + '.tmp.c'
 	mut files := []string
 	// Add builtin files
-	if !out_name.contains('builtin.o') {
+	//if !out_name.contains('builtin.o') {
 		for builtin in builtins {
 			mut f := '$xQRoot/xQLib/builtin/$builtin'
 			// In default mode we use precompiled xQLib.o, point to .xqh files with signatures
@@ -776,7 +796,7 @@ fn new_xQ(args[]string) &UTxQ {
 			}
 			files << f
 		}
-	}
+	//}
 
 	mut cflags := ''
 	for ci, cv in args {

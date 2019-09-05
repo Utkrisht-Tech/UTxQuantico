@@ -1428,7 +1428,7 @@ fn (xP mut Parser) bterm() string {
 fn (xP mut Parser) name_expr() string {
 	xP.has_immutable_field = false
 	sh := xP.cgen.add_shadow()
-	// amp
+	// amper
 	ptr := xP.tk == .AMPER
 	deref := xP.tk == .STAR
 	if ptr || deref {
@@ -1639,9 +1639,16 @@ fn (xP mut Parser) name_expr() string {
 	// TODO verify this and handle errors
 	peek := xP.peek()
 	if peek != .LPAR && peek != .LESSER {
+		// Register anonymous fn type
+		fn_typ := Type {
+			name: f.typ_str()// 'fn (int, int) string'
+			mod: xP.mod
+			function: f
+		}
+		xP.table.register_type2(fn_typ)
 		xP.gen(xP.table.cgen_name(f))
 		xP.next()
-		return 'void*'
+		return f.typ_str() //'void*'
 	}
 	// TODO bring back
 	if f.typ == 'void' && !xP.inside_if_expr {
@@ -3059,9 +3066,11 @@ fn (xP mut Parser) if_statement(is_expr bool, elif_depth int) string {
 		}
 		xP.check(.LCBR)
 		// statements() returns the type of the last statement
+		first_typ := typ
 		typ = xP.statements()
 		xP.inside_if_expr = false
 		if is_expr {
+			xP.check_types(first_typ, typ)
 			xP.gen(strings.repeat(`)`, elif_depth + 1))
 		}
 		else_returns := xP.returns
