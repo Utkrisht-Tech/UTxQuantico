@@ -321,7 +321,7 @@ fn (table &dataTable) known_type(typ_ string) bool {
 
 fn (t &dataTable) find_fn(name string) Fn {
 	f := t.fns[name]
-	if !isnil(f.name.str) {
+	if !isnull(f.name.str) {
 		return f
 	}
 	return Fn{}

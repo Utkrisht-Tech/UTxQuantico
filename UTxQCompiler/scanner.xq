@@ -18,7 +18,7 @@ mut:
 	dollar_end              bool
 	is_debug                bool
 	line_comment            string
-  mline_comment           string
+	mline_comment           string
 	is_started              bool
 	// xQFormatter
 	format_out              strings.Builder
