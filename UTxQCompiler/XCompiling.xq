@@ -10,6 +10,9 @@ import (
 )
 
 fn (xQ mut UTxQ) XCompiler() {
+	// build any thirdparty obj files
+	xQ.build_thirdparty_obj_files()
+
 	// Just create a c file and exit
 	if xQ.out_name.ends_with('.c') {
 		os.mv(xQ.out_name_c, xQ.out_name)
@@ -33,15 +36,6 @@ fn (xQ mut UTxQ) XCompiler() {
 	xQ.log('XCompiler() isprod=$xQ.pref.is_prod outname=$xQ.out_name')
 	mut a := [xQ.pref.cflags, '-std=gnu11', '-w'] // arguments for the C compiler
 
-	mut seenflags := map[string]int
-	mut uniqueflags := []string
-	for f in xQ.table.flags {
-		seenflags[ f ] = seenflags[ f ] + 1
-		if seenflags[ f ] > 1 { continue }
-		uniqueflags << f
-	}
-	flags := uniqueflags.join(' ')
-	// Set out name
 	if xQ.pref.is_so {
 		a << '-shared -fPIC '// -Wl,-z,defs'
 		xQ.out_name = xQ.out_name + '.so'
@@ -92,7 +86,7 @@ fn (xQ mut UTxQ) XCompiler() {
 	// -I flags
 	/*
 mut args := ''
-	for flag in xQ.table.flags {
+	for flag in xQ.get_os_cflags() {
 		if !flag.starts_with('-l') {
 			args += flag
 			args += ' '
@@ -133,7 +127,9 @@ mut args := ''
 	if xQ.os == .mac {
 		a << '-mmacosx-version-min=10.7'
 	}
-	a << flags
+	for flag in xQ.get_os_cflags() {
+		a << flag.format()
+	}
 	a << libs
 	// macOS code can include objective C  TODO remove once objective C is replaced with C
 	// Without these libs compilation will fail on Linux
@@ -224,9 +220,9 @@ fn (c mut UTxQ) XCompiler_windows_cross() {
 	}
 	mut args := '-o $c.out_name -w -L. '
 	// -I flags
-	for flag in c.table.flags {
-		if !flag.starts_with('-l') {
-				args += flag
+	for flag in c.get_os_cflags() {
+		if flag.name != '-l' {
+				args += flag.format()
 				args += ' '
 		}
 	}
@@ -243,9 +239,9 @@ fn (c mut UTxQ) XCompiler_windows_cross() {
 	}
 	args += ' $c.out_name_c '
 	// -l flags (libs)
-	for flag in c.table.flags {
-			if flag.starts_with('-l') {
-					args += flag
+	for flag in c.get_os_cflags() {
+			if flag.name == '-l' {
+					args += flag.format()
 					args += ' '
 			}
 	}
@@ -288,6 +284,20 @@ fn (c mut UTxQ) XCompiler_windows_cross() {
 	println('Done!')
 }
 
+
+fn (c UTxQ) build_thirdparty_obj_files() {
+	for flag in c.get_os_cflags() {
+		if flag.value.ends_with('.o') {
+			if c.os == .msvc {
+				build_thirdparty_obj_file_with_msvc(flag.value)
+			}
+			else {
+				build_thirdparty_obj_file(flag.value)
+			}
+		}
+	}
+}
+
 fn find_c_compiler() string {
 	args := env_xQFlags_and_os_args().join(' ')
 	defaultcc := find_c_compiler_default()
@@ -305,6 +315,6 @@ fn find_c_compiler_default() string {
 }
 
 fn find_c_compiler_thirdparty_options() string {
-	$if windows {	return '' }
+	$if windows { return '' }
 	return '-fPIC'
 }

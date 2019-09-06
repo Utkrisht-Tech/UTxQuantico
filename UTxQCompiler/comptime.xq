@@ -141,46 +141,11 @@ fn (xP mut Parser) chash() {
 	is_sig := xP.is_sig()
 	if hash.starts_with('flag ') {
 		mut flag := hash.right(5)
-		// No the right os? Skip!
-		// mut ok := true
-		if hash.contains('linux') && xP.os != .linux {
-			return
-		}
-		else if hash.contains('darwin') && xP.os != .mac {
-			return
-		}
-		else if hash.contains('windows') && (xP.os != .windows && xP.os != .msvc) {
-			return
-		}
-		// Remove "linux" etc from flag
-		if flag.contains('linux') || flag.contains('darwin') || flag.contains('windows') {
-			pos := flag.index(' ')
-			flag = flag.right(pos)
-		}
-		has_xQRoot := flag.contains('@XQROOT')
-		flag = flag.trim_space().replace('@XQROOT', xP.xQRoot)
-		if xP.table.flags.contains(flag) {
-			return
-		}
-		// expand `@XQMOD/pg/pg.o` to absolute path
-		has_xQMod := flag.contains('@XQMOD')
-		flag = flag.trim_space().replace('@XQMOD', ModPath)
-		if xP.table.flags.contains(flag) {
-			return
-		}
+		// expand `@XQROOT` `@XQMOD` to absolute path
+		flag = flag.replace('@XQROOT', xP.xQRoot)
+		flag = flag.replace('@XQMOD', ModPath)
 		xP.log('adding flag "$flag"')
-		// `@XQROOT/thirdparty/glad/glad.o`, make sure it exists, otherwise build it
-		if (has_xQRoot || has_xQMod) && flag.contains('.o') {
-			flag = os.realpath( flag )
-			//println( 'absolute filepath to objectfile is now: $flag | os is: $xP.os ')
-			if xP.os == .msvc {
-				build_thirdparty_obj_file_with_msvc(flag)
-			}
-			else {
-				build_thirdparty_obj_file(flag)
-			}
-		}
-		xP.table.flags << flag
+		xP.table.parse_cflag(flag)
 		return
 	}
 	if hash.starts_with('include') {

@@ -16,7 +16,7 @@ mut:
 	fns                    map[string]Fn
 	generic_fns            []GenFnTable //map[string]GenFnTable // generic_fns['listen_and_serve'] == ['Blog', 'Forum']
 	file_imports           []ParsedImportsTable // List of file Imports scoped to the parsed file
-	build_flags            []string //  ['-framework DotNet', '-WebGL']
+	cflags                 []CFlag //  ['-framework DotNet', '-WebGL']
 	fn_count               int // atomic
 	is_obfuscated          bool
   obf_ids                map[string]int
