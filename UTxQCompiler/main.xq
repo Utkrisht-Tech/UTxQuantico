@@ -678,6 +678,9 @@ fn new_xQ(args[]string) &UTxQ {
 	if args.contains('run') {
 		dir = get_all_after(joined_args, 'run', '')
 	}
+	if dir.ends_with('/') {
+		dir = dir.all_before_last('/')
+	}
 	if args.len < 2 {
 		dir = ''
 	}
@@ -690,8 +693,10 @@ fn new_xQ(args[]string) &UTxQ {
 		build_mode = .build
 		// xQ -lib ~/UTxQ/os => os.o
 		//mod = os.dir(dir)
-		if dir.contains('/') {
-			mod = dir.all_after('/')
+		mod = if dir.contains('/') {
+			dir.all_after('/')
+		} else {
+			dir
 		}
 		println('Building module "${mod}" (dir="$dir")...')
 		//out_name = '$TmpPath/xQLib/${base}.o'
