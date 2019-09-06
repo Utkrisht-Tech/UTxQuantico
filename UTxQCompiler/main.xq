@@ -325,7 +325,9 @@ fn (xQ mut UTxQ) compile() {
   cgen.save()
 	if xQ.pref.is_verbose {
 		xQ.log('flags=')
-		println(xQ.table.flags)
+		for flag in xQ.get_os_cflags() {
+			println(' * ' + flag.format())
+		}
 	}
 	xQ.XCompiler()
 }
@@ -437,7 +439,7 @@ fn (xQ UTxQ) run_compiled_executable_and_exit() {
 	if xQ.pref.is_verbose {
 		println('============ running $xQ.out_name ============')
 	}
-	mut cmd := final_target_out_name(xQ.out_name).replace('.exe','')
+	mut cmd := '"' + final_target_out_name(xQ.out_name).replace('.exe','') + '"'
 	if os.args.len > 3 {
 		cmd += ' ' + os.args.right(3).join(' ')
 	}
@@ -781,9 +783,7 @@ fn new_xQ(args[]string) &UTxQ {
 	xQRoot := os.dir(os.executable())
 	//println('XQROOT=$xQRoot')
 	// UTxQ.exe's parent directory should contain xQLib
-	if os.dir_exists(xQRoot) && os.dir_exists(xQRoot + '/xQLib/builtin') {
-
-	}  else {
+	if !os.dir_exists(xQRoot) || !os.dir_exists(xQRoot + '/xQLib/builtin') {
 		println('xQLib not found. It should be next to the UTxQ executable. ')
 		println('Go to https://UTxQuantico.io to install UTxQuantico.')
 		exit(1)

@@ -686,7 +686,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 	}
 	// `(int, string, int)`
 	// Just register fn arg types
-	types_only := xP.tk == .STAR || (xP.peek() == .COMMA && xP.table.known_type(xP.lit)) || xP.peek() == .RPAR// (int, string)
+	types_only := xP.tk == .STAR || xP.tk == .AMPER || (xP.peek() == .COMMA && xP.table.known_type(xP.lit)) || xP.peek() == .RPAR// (int, string)
 	if types_only {
 		for xP.tk != .RPAR {
 			typ := xP.get_type()
