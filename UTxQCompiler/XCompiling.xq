@@ -85,14 +85,14 @@ fn (xQ mut UTxQ) XCompiler() {
 	}
 	// -I flags
 	/*
-mut args := ''
+	mut args := ''
 	for flag in xQ.get_os_cflags() {
 		if !flag.starts_with('-l') {
-			args += flag
+			args += flag.value
 			args += ' '
 		}
 	}
-*/
+	*/
 	if xQ.pref.sanitize {
 		a << '-fsanitize=leak'
 	}
@@ -111,7 +111,7 @@ mut args := ''
 	// Cross compiling windows
 	//
 	// Output executable name
-	a << '-o $xQ.out_name'
+	a << '-o "$xQ.out_name"'
 	if os.dir_exists(xQ.out_name) {
 		cerror('\'$xQ.out_name\' is a directory')
 	}
@@ -127,6 +127,7 @@ mut args := ''
 	if xQ.os == .mac {
 		a << '-mmacosx-version-min=10.7'
 	}
+	// Add all flags
 	for flag in xQ.get_os_cflags() {
 		a << flag.format()
 	}

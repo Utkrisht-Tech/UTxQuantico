@@ -938,7 +938,9 @@ fn test_xQ() {
 		file := os.realpath( relative_file )
 		tmpcfilepath := file.replace('_test.xq', '_test.tmp.c')
 		print(relative_file + ' ')
-		r := os.exec('$xQExe $joined_args -debug $file') or {
+		mut cmd := '"$xQExe" $joined_args -debug "$file"'
+		if os.user_os() == 'windows' { cmd = '"$cmd"' }
+		r := os.exec(cmd) or {
 			failed = true
 			println('FAIL')
 			continue
@@ -957,7 +959,9 @@ fn test_xQ() {
 		file := os.realpath( relative_file )
 		tmpcfilepath := file.replace('.xq', '.tmp.c')
 		print(relative_file + ' ')
-		r := os.exec('$xQExe $joined_args -debug $file') or {
+		mut cmd := '"$xQExe" $joined_args -debug "$file"'
+		if os.user_os() == 'windows' { cmd = '"$cmd"' }
+		r := os.exec(cmd) or {
 			failed = true
 			println('FAIL')
 			continue
