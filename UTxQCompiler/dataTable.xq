@@ -72,7 +72,7 @@ mut:
 	mod             string // module where this var is stored
 	line_no_y       int
 	access_mod      AccessMod
-	is_global       bool // __global (translated from C only)
+	is_global       bool // global (translated from C only)
 	is_used         bool
 	is_changed      bool
 	scope_level     int
