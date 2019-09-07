@@ -83,16 +83,6 @@ fn (xQ mut UTxQ) XCompiler() {
 			libs += ' "$ModPath/xQLib/${imp}.o"'
 		}
 	}
-	// -I flags
-	/*
-	mut args := ''
-	for flag in xQ.get_os_cflags() {
-		if !flag.starts_with('-l') {
-			args += flag.value
-			args += ' '
-		}
-	}
-	*/
 	if xQ.pref.sanitize {
 		a << '-fsanitize=leak'
 	}
@@ -115,6 +105,7 @@ fn (xQ mut UTxQ) XCompiler() {
 	if os.dir_exists(xQ.out_name) {
 		cerror('\'$xQ.out_name\' is a directory')
 	}
+	// macOS code can include objective C  TODO remove once objective C is replaced with C
 	if xQ.os == .mac {
 		a << '-x objective-c'
 	}
@@ -127,12 +118,17 @@ fn (xQ mut UTxQ) XCompiler() {
 	if xQ.os == .mac {
 		a << '-mmacosx-version-min=10.7'
 	}
-	// Add all flags
+	// Add all flags (-I -l -L etc) not .o files
 	for flag in xQ.get_os_cflags() {
+		if flag.value.ends_with('.o') { continue }
+		a << flag.format()
+	}
+	// add .o files
+	for flag in xQ.get_os_cflags() {
+		if !flag.value.ends_with('.o') { continue }
 		a << flag.format()
 	}
 	a << libs
-	// macOS code can include objective C  TODO remove once objective C is replaced with C
 	// Without these libs compilation will fail on Linux
 	// || os.user_os() == 'linux'
 	if xQ.pref.build_mode != .build && (xQ.os == .linux || xQ.os == .freebsd || xQ.os == .openbsd ||
