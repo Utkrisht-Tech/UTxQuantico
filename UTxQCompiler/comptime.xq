@@ -115,7 +115,7 @@ fn (xP mut Parser) comp_time() {
 			os.rm('.WebXTemplate.xq')
 		}
 		xPP.is_WebX = true
-		xPP.cur_fn = xP.cur_fn // give access too all variables in current function
+		xPP.set_current_fn( xP.cur_fn ) // give access too all variables in current function
 		xPP.parse(.main)
 		template_fn_body := xP.cgen.lines.slice(pos + 2, xP.cgen.lines.len).join('\n').clone()
 		end_pos := template_fn_body.last_index('Builder_str( sb )')  + 19 // TODO

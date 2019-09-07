@@ -284,7 +284,7 @@ fn (xP mut Parser) fn_decl() {
 		''
 	}
 	if !xP.is_WebX {
-		xP.cur_fn = f
+		xP.set_current_fn( f )
 	}
 	// Generate `User_register()` instead of `register()`
 	// Internally it's still stored as "register" in type User
@@ -492,7 +492,7 @@ _thread_so = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&reload_so, 0, 0, 0);
 		return
 	}
 	xP.check_unused_variables()
-	xP.cur_fn = EmptyFn
+	xP.set_current_fn( EmptyFn )
 	xP.returns = false
 	if !is_generic {
 		xP.genln('}')

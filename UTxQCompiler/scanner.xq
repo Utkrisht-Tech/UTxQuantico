@@ -25,6 +25,7 @@ mut:
 	format_indent           int
 	format_line_empty       bool
 	prev_tk                 Token
+	fn_name 				string // needed for @FN
 }
 
 fn new_scanner(file_path string) &Scanner {
@@ -444,6 +445,17 @@ fn (sc mut Scanner) scan() ScanRes {
     } else {
       sc.pos_x++
       name := sc.identify_name()
+	  // @FN => will be substituted with the name of the current UTxQ function
+	  // @FILE => will be substituted with the path of the UTxQ source file
+	  // @LINE_NO_Y => will be substituted with the UTxQ line number where it appears (as a string)
+	  // @COLUMN_X => will be substituted with the column where it appears (as a string).
+	  // This allows things like this: 
+	  // println( 'file: ' + @FILE + ' | line: ' + @LINE_NO_Y + ' | column: ' + @COLUMN_X + ' | fn: ' + @FN)
+	  // ... useful while debugging/tracing
+	  if name == 'FN' { return scan_res(.str, sc.fn_name) }
+	  if name == 'FILE' { return scan_res(.str, os.realpath(sc.file_path)) }
+	  if name == 'LINE_NO_Y' { return scan_res(.str, (sc.line_no_y+1).str()) }
+	  if name == 'COLUMN_X' { return scan_res(.str, (sc.current_column()).str()) }
       if !is_key(name) {
          return scan_res(.AT, '')
       // sc.error('@ must be used before keywords (e.g. `@type string`)')
@@ -607,9 +619,13 @@ fn (sc &Scanner) find_current_line_start_position() int {
 		return linestart
 }
 
+fn (sc &Scanner) current_column() int {
+	return sc.pos_x - sc.find_current_line_start_position()
+}
+
 fn (sc &Scanner) error(message string) {
 	fullpath := os.realpath( sc.file_path )
-	column := sc.pos_x - sc.find_current_line_start_position()
+	column := sc.current_column()
 	// The filepath:line:col: format is the default C compiler
 	// error output format. It allows editors and IDE's like
 	// emacs to quickly find the errors in the output

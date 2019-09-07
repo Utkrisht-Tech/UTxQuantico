@@ -118,6 +118,11 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 	return xP
 }
 
+fn (xP mut Parser) set_current_fn(f &Fn) {
+	xP.cur_fn = f
+	xP.scanner.fn_name = '${f.mod}.${f.name}'
+}
+
 fn (xP mut Parser) next() {
 	xP.prev_tk2 = xP.prev_tk
 	xP.prev_tk = xP.tk
@@ -260,7 +265,7 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 		case Token.EOF:
 			xP.log('end of parse()')
 			if xP.is_script && !xP.pref.is_test {
-				xP.cur_fn = MainFn
+				xP.set_current_fn( MainFn )
 				xP.check_unused_variables()
 			}
 			if false && !xP.first_cp() && xP.fileis('main.xq') {
@@ -279,12 +284,12 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 				// we need to set it to save and find variables
 				if xP.first_cp() {
 					if xP.cur_fn.name == '' {
-						xP.cur_fn = MainFn
+						xP.set_current_fn( MainFn )
 					}
 					return
 				}
 				if xP.cur_fn.name == '' {
-					xP.cur_fn = MainFn
+					xP.set_current_fn( MainFn )
 					if xP.pref.is_repl {
 						xP.cur_fn.clear_vars()
 					}
@@ -2521,16 +2526,28 @@ fn (xP mut Parser) string_expr() {
 		// Custom format? ${t.hour:02d}
 		custom := xP.tk == .COLON
 		if custom {
-			format += '%'
+			mut cformat := ''
 			xP.next()
 			if xP.tk == .DOT {
-				format += '.'
+				cformat += '.'
 				xP.next()
 			}
-			format += xP.lit// 02
+			if xP.tk == .MINUS { // support for left aligned formatting
+				cformat += '-'
+				xP.next()
+			}
+			cformat += xP.lit// 02
 			xP.next()
-			format += xP.lit// f
-			// println('custom str F=$format')
+			fspec := xP.lit // f
+			cformat += fspec
+			if fspec == 's' {
+				//println('custom str F=$cformat | format_specifier: "$fspec" | typ: $typ ')
+				if typ != 'string' {
+					xP.error('only UTxQ strings can be formatted with a :${cformat} format, but you have given "${val}", which has type ${typ}.')
+				}
+				args = args.all_before_last('${val}.len, ${val}.str') + '${val}.str'
+			}
+			format += '%$cformat'
 			xP.next()
 		}
 		else {
@@ -2552,6 +2569,7 @@ fn (xP mut Parser) string_expr() {
 			}
 			format += f
 		}
+		//println('interpolation format is: |${format}| args are: |${args}| ')
 	}
 	if complex_inter {
 		xP.fgen('}')
