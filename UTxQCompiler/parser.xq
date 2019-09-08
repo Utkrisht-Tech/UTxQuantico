@@ -693,7 +693,7 @@ fn (xP mut Parser) enum_decl(_enum_name string) {
 		mod: xP.mod
 		parent: 'int'
 		cat: TypeCategory.enum_
-		enum_vals: fields
+		enum_vals: fields.clone()
 	})
 	xP.check(.RCBR)
 	xP.fgenln('\n')
@@ -1054,12 +1054,12 @@ fn (xP mut Parser) close_scope() {
 			// println('breaking. "$xQ.name" xQ.scope_level=$xQ.scope_level')
 			break
 		}
-		if false && !xP.building_xQ && !xQ.is_mutable && xQ.is_alloc {
+		if xP.building_xQ && xQ.is_alloc {
 			if xQ.typ.starts_with('array_') {
 				xP.genln('xQ_array_free($xQ.name); // close_scope free')
 			}
 			else if xQ.typ == 'string' {
-				xP.genln('xQ_string_free($xQ.name); // close_scope free')
+				//xP.genln('xQ_string_free($xQ.name); // close_scope free')
 			}
 			else if xQ.ptr {
 				//xQ.genln('free($xQ.name); // close_scope free')
