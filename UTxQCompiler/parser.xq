@@ -45,6 +45,7 @@ mut:
 	xQh_lines      []string
 	inside_if_expr bool
 	inside_unwrapping_match_statement bool
+	inside_return_expr bool
 	is_struct_init bool
 	if_expr_count  int
 	for_expr_count int // to detect whether `continue` can be used
@@ -60,7 +61,6 @@ mut:
 	attr           string
 	xQ_script 		 bool // "UTxQ bash", import all os functions into global space
 	var_decl_name	 string 	// To allow declaring the variable so that it can be used in the struct initialization
-	building_xQ		 bool
 	is_alloc		   bool // Whether current expression resulted in an allocation
 	cur_gen_type	 string // "App" to replace "T" in current generic function
 	is_WebX        bool
@@ -106,8 +106,6 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 		pref: xQ.pref
 		os: xQ.os
 		xQRoot: xQ.xQRoot
-		building_xQ: !xQ.pref.is_repl && (path.contains('UTxQCompiler/') || path.contains('UTxQ/xQLib'))
-
 	}
 
 	xQ.cgen.line_directives = xQ.pref.is_debuggable
@@ -241,7 +239,7 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 			// $if, $else
 			xP.comp_time()
 		case Token.key_global:
-			if !xP.pref.translated && !xP.pref.is_live && !xP.builtin_mod && !xP.building_xQ && !os.getwd().contains('/volt') {
+			if !xP.pref.translated && !xP.pref.is_live && !xP.builtin_mod && !xP.pref.building_xQ && !os.getwd().contains('/volt') {
 				xP.error('global is only allowed in translated code')
 			}
 			xP.next()
@@ -1050,13 +1048,22 @@ fn (xP mut Parser) close_scope() {
 	mut i := xP.cur_fn.var_idx - 1
 	for ; i >= 0; i-- {
 		xQ := xP.cur_fn.local_vars[i]
-		if xQ.scope_level ≠ xP.cur_fn.scope_level {
+		if xQ.scope_level != xP.cur_fn.scope_level {
 			// println('breaking. "$xQ.name" xQ.scope_level=$xQ.scope_level')
 			break
 		}
-		if xP.building_xQ && xQ.is_alloc {
+		// Clean up memory, do this now for only UTxQCompiler
+		if xP.pref.building_xQ && xQ.is_alloc && !xP.pref.is_test {
 			if xQ.typ.starts_with('array_') {
-				xP.genln('xQ_array_free($xQ.name); // close_scope free')
+				//if false && xP.returns {
+				if xP.returns {
+					if !xQ.is_returned {
+						prev_line := xQ.cgen.lines[xP.cgen.lines.len-2]
+						xP.cgen.lines[xP.cgen.lines.len-2] = 'xQ_array_free($xQ.name); /* :) close_scope free */' + prev_line
+					}
+				} else {
+					xP.genln('xQ_array_free($xQ.name); // close_scope free')
+				}
 			}
 			else if xQ.typ == 'string' {
 				//xP.genln('xQ_string_free($xQ.name); // close_scope free')
@@ -1195,7 +1202,7 @@ fn (xP mut Parser) statement(add_semi bool) string {
 // is_map: are we in map assignment? (m[key] = val) if yes, dont generate '='
 // this can be `user = ...`  or `user.field = ...`, in both cases `val` is `user`
 fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
-	xP.log('assign_statement() name=$val.name tk=')
+	//xP.log('assign_statement() name=$val.name tk=')
 	is_vid := xP.fileis('vid') // TODO remove
 	tk := xP.tk
 	//if !val.is_mutable && !val.is_arg && !xP.pref.translated && !val.is_global{
@@ -1231,6 +1238,9 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 	xP.next()
 	pos := xP.cgen.cur_line.len
 	expr_type := xP.bool_expression()
+	//if xP.expected_type.starts_with('array_') {
+		//xP.warn('Expecting array got $expr_type')
+	//}
 	// Allow `num = 4` where `num` is an `?int`
 	if xP.assigned_type.starts_with('Option_') && expr_type == xP.assigned_type.right('Option_'.len) {
 		println('allowing option asss')
@@ -1519,6 +1529,13 @@ fn (xP mut Parser) name_expr() string {
 		else if ptr {
 			typ += '*'
 		}
+		if xP.inside_return_expr {
+			//println('marking $v.name returned')
+			xP.cur_fn.mark_var_returned(v)
+			// v.is_returned = true // TODO modifying a local variable
+			// that's not used afterwards, this should be a compilation
+			// error
+		}	
 		return typ
 	}
 	// if known_type || is_c_struct_init || (xP.first_cp() && xP.peek() == .LCBR) {
@@ -3585,7 +3602,9 @@ fn (xP mut Parser) return_statement() {
 		}
 		else {
 			sh := xP.cgen.add_shadow()
+			xP.inside_return_expr = true
 			expr_type := xP.bool_expression()
+			xP.inside_return_expr = false
 			// Automatically wrap an object inside an option if the function returns an option
 			if xP.cur_fn.typ.ends_with(expr_type) && xP.cur_fn.typ.starts_with('Option_') {
 				tmp := xP.get_tmp()

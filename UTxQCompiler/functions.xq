@@ -64,6 +64,15 @@ fn (f mut Fn) mark_var_used(var Var) {
 	}
 }
 
+fn (f mut Fn) mark_var_returned(var Var) {
+	for i, vAr in f.local_vars {
+		if vAr.name == var.name {
+			f.local_vars[i].is_returned = true
+			return
+		}
+	}
+}
+
 fn (f mut Fn) mark_var_changed(var Var) {
 	for i, kv in f.local_vars {
 		if kv.name == var.name {

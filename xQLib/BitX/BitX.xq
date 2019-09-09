@@ -5,7 +5,7 @@
 module BitX
 
 /*
-BitX is a module (shared library for UTxQuantico) for manipulating bits(0,1).
+BitX is a module for UTxQuantico to manipulate bit(0,1) arrays.
 
 BitXSpace structure
 ------------------
@@ -480,17 +480,17 @@ public fn (instance mut BitXSpace) reverse() BitXSpace {
 
 // resize() changes the size of the bit array to 'new_size'
 
-public fn (instance mut BitXSpace) resize(size int) {
-	new_bitNSlots := bitNSlots_in(size)
+public fn (instance mut BitXSpace) resize(new_size int) {
+	new_bitNSlots := bitNSlots_in(new_size)
 	old_size := instance.size
 	old_bitNSlots := bitNSlots_in(old_size)
 	mut xspace := [u32(0); new_bitNSlots]
 	for i := 0; i < old_bitNSlots && i < new_bitNSlots; i++ {
 		xspace[i] = instance.xspace[i]
 	}
-	instance.xspace = xspace
-	instance.size = size
-	if size < old_size && size % SLOT_SIZE != 0 {
+	instance.xspace = xspace.clone()
+	instance.size = new_size
+	if new_size < old_size && new_size % SLOT_SIZE != 0 {
 		clearTail_in(mut instance)
 	}
 }

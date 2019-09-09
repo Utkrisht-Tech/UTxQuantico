@@ -97,6 +97,7 @@ mut:
 						 // You could pass several -cflags XXX arguments. They will be merged with each other.
 						 // You can also quote several options at the same time: -cflags '-Os -fno-inline-small-functions'.
 	ccompiler      string // the name of the used C compiler
+	building_xQ	   bool
 }
 
 
@@ -811,6 +812,7 @@ fn new_xQ(args[]string) &UTxQ {
 	}
 
 	is_obfuscated := args.contains('-obf')
+	is_repl:=args.contains('-repl')
 	pref := &Preferences {
 		is_test: is_test
 		is_script: is_script
@@ -827,10 +829,12 @@ fn new_xQ(args[]string) &UTxQ {
 		show_c_cmd: args.contains('-show_c_cmd')
 		translated: args.contains('translated')
 		is_run: args.contains('run')
-		is_repl: args.contains('-repl')
+		is_repl: is_repl
 		build_mode: build_mode
 		cflags: cflags
 		ccompiler: find_c_compiler()
+		building_xQ: !is_repl && (dir == 'UTxQCompiler'  ||
+			dir.contains('UTxQ/xQLib'))
 	}
 	if pref.is_verbose || pref.is_debug {
 		println('C compiler=$pref.ccompiler')
