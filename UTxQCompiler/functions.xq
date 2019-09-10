@@ -108,7 +108,7 @@ fn (f mut Fn) clear_vars() {
 
 // xQLib header file
 fn (xP mut Parser) is_sig() bool {
-	return (xP.pref.build_mode == .default_mode || xP.pref.build_mode == .build) &&
+	return (xP.pref.build_mode == .default_mode || xP.pref.build_mode == .build_module) &&
 	(xP.file_path.contains(ModPath))
 }
 

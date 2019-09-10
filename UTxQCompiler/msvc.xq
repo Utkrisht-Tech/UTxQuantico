@@ -252,7 +252,7 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 	xQ.out_name = os.realpath( xQ.out_name )
 
 	mut alibs := []string // builtin.o os.o http.o etc
-	if xQ.pref.build_mode == .build {
+	if xQ.pref.build_mode == .build_module {
 	}
 	else if xQ.pref.build_mode == .embed_xQLib {
 		//

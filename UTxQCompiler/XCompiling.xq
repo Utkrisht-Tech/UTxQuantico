@@ -40,7 +40,7 @@ fn (xQ mut UTxQ) XCompiler() {
 		a << '-shared -fPIC '// -Wl,-z,defs'
 		xQ.out_name = xQ.out_name + '.so'
 	}
-	if xQ.pref.build_mode == .build {
+	if xQ.pref.build_mode == .build_module {
 		xQ.out_name = ModPath + xQ.dir + '.o' //xQ.out_name
 		println('Building ${xQ.out_name}...')
 	}
@@ -64,7 +64,7 @@ fn (xQ mut UTxQ) XCompiler() {
 	}
 
 	mut libs := ''// builtin.o os.o http.o etc
-	if xQ.pref.build_mode == .build {
+	if xQ.pref.build_mode == .build_module {
 		a << '-c'
 	}
 	else if xQ.pref.build_mode == .embed_xQLib {
@@ -132,7 +132,7 @@ fn (xQ mut UTxQ) XCompiler() {
 	a << libs
 	// Without these libs compilation will fail on Linux
 	// || os.user_os() == 'linux'
-	if xQ.pref.build_mode != .build && (xQ.os == .linux || xQ.os == .freebsd || xQ.os == .openbsd ||
+	if xQ.pref.build_mode != .build_module && (xQ.os == .linux || xQ.os == .freebsd || xQ.os == .openbsd ||
 		xQ.os == .netbsd || xQ.os == .dragonfly) {
 		a << '-lm -lpthread '
 		// -ldl is a Linux only thing. BSDs have it in libc.
@@ -186,7 +186,7 @@ fn (xQ mut UTxQ) XCompiler() {
 	}
 	// Link it if we are cross compiling and need an executable
 	/*
-	if xQ.os == .linux && !linux_host && xQ.pref.build_mode != .build {
+	if xQ.os == .linux && !linux_host && xQ.pref.build_mode != .build_module {
 		xQ.out_name = xQ.out_name.replace('.o', '')
 		obj_file := xQ.out_name + '.o'
 		println('linux obj_file=$obj_file out_name=$xQ.out_name')
@@ -266,7 +266,7 @@ fn (c mut UTxQ) XCompiler_windows_cross() {
 		println('Cross compilation for Windows failed. Make sure you have clang installed.')
 		exit(1)
 	}
-	if c.pref.build_mode != .build {
+	if c.pref.build_mode != .build_module {
 		link_cmd := 'lld-link $obj_name $winroot/lib/libcmt.lib ' +
 		'$winroot/lib/libucrt.lib $winroot/lib/kernel32.lib $winroot/lib/libvcruntime.lib ' +
 		'$winroot/lib/uuid.lib'

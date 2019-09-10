@@ -26,6 +26,7 @@ mut:
 	format_line_empty       bool
 	prev_tk                 Token
 	fn_name 				string // needed for @FN
+	should_print_line_on_error bool
 }
 
 fn new_scanner(file_path string) &Scanner {
@@ -57,6 +58,7 @@ fn new_scanner(file_path string) &Scanner {
 		file_path: file_path
 		text: text
 		format_out: strings.new_builder(1000)
+		should_print_line_on_error: true
 	}
 
 	return scanner
@@ -607,16 +609,36 @@ fn (sc mut Scanner) scan() ScanRes {
 }
 
 fn (sc &Scanner) find_current_line_start_position() int {
-	if sc.pos_x >= sc.text.len {
-		return sc.pos_x
-	}
+	if sc.pos_x >= sc.text.len { return sc.pos_x }
 	mut linestart := sc.pos_x
 	for {
-		if linestart <= 0  {break}
-		if sc.text[linestart] == 10 || sc.text[linestart] == 13 { break }
+		if linestart <= 0  {
+			linestart = 1
+			break
+		}
+		if sc.text[linestart] == 10 || sc.text[linestart] == 13 {
+			linestart++
+			break
+		}
 		linestart--
 	}
-		return linestart
+	return linestart
+}
+
+fn (sc &Scanner) find_current_line_end_position() int {
+	if sc.pos_x >= sc.text.len { return sc.pos_x }
+	mut lineend := sc.pos_x
+	for {
+		if lineend >= sc.text.len {
+			lineend = sc.text.len
+			break
+		}
+		if sc.text[lineend] == 10 || sc.text[lineend] == 13 {
+			break
+		}
+		lineend++
+	}
+	return lineend
 }
 
 fn (sc &Scanner) current_column() int {
@@ -624,15 +646,33 @@ fn (sc &Scanner) current_column() int {
 }
 
 fn (sc &Scanner) error(message string) {
+	linestart := sc.find_current_line_start_position()
+	lineend := sc.find_current_line_end_position()
+	column := sc.pos_x - linestart
+	if sc.should_print_line_on_error {
+		line := sc.text.substr( linestart, lineend )
+		// The pointerline should have the same spaces/tabs as the offending
+		// line, so that it prints the ^ character exactly on the *same spot*
+		// where it is needed. That is the reason we can not just
+		// use strings.repeat(` `, column) to form it.
+		pointerline := line.clone()
+		mut pl := pointerline.str
+		for i,c in line {
+			pl[i] = ` `
+			if i == column { pl[i] = `^` }
+			else if c.is_space() { pl[i] = c  }
+		}
+		println(line)
+		println(pointerline)
+	}
 	fullpath := os.realpath( sc.file_path )
-	column := sc.current_column()
 	// The filepath:line:col: format is the default C compiler
 	// error output format. It allows editors and IDE's like
 	// emacs to quickly find the errors in the output
 	// and jump to their source with a keyboard shortcut.
 	// Using only the filename leads to inability of IDE/editors
 	// to find the source file, when it is in another folder.
-	println('${fullpath}:${sc.line_no_y + 1}:$column: $message')
+	println('${fullpath}:${sc.line_no_y + 1}:${column+1}: $message')
 	exit(1)
 }
 

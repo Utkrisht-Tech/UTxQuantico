@@ -108,6 +108,10 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 		xQRoot: xQ.xQRoot
 	}
 
+	if xP.pref.is_repl {
+		xP.scanner.should_print_line_on_error = false
+	}
+
 	xQ.cgen.line_directives = xQ.pref.is_debuggable
 	xQ.cgen.file = path
 
