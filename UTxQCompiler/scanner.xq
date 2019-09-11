@@ -456,7 +456,7 @@ fn (sc mut Scanner) scan() ScanRes {
 	  // println( 'file: ' + @FILE + ' | line: ' + @LINE_NO_Y + ' | column: ' + @COLUMN_X + ' | fn: ' + @FN)
 	  // ... useful while debugging/tracing
 	  if name == 'FN' { return scan_res(.str, sc.fn_name) }
-	  if name == 'FILE' { return scan_res(.str, os.realpath(sc.file_path)) }
+	  if name == 'FILE' { return scan_res(.str, os.realpath(sc.file_path).replace('\\', '\\\\')) } // escape \
 	  if name == 'LINE_NO_Y' { return scan_res(.str, (sc.line_no_y+1).str()) }
 	  if name == 'COLUMN_X' { return scan_res(.str, (sc.current_column()).str()) }
 	  if name == 'VERHASH' { return scan_res(.str, verHash()) }
