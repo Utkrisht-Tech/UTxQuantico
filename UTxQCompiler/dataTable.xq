@@ -5,7 +5,7 @@
 module main
 
 import math
-import strings
+import StringX
 
 struct dataTable {
 mut:
@@ -183,7 +183,7 @@ fn (f Fn) str() string {
 }
 
 fn (t &dataTable) debug_fns() string {
-	mut st := strings.new_builder(1000)
+	mut st := StringX.new_builder(1000)
 	for k, f in t.fns {
 		st.writeln(f.name)
 	}

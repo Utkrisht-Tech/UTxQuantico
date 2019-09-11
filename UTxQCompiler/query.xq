@@ -4,7 +4,7 @@
 
 module main
 
-import strings
+import StringX
 
 fn SqlX_params2params_gen(SqlX_params []string, SqlX_types []string, qprefix string) string {
 	mut params_gen := ''
@@ -120,7 +120,7 @@ fn (xP mut Parser) select_query(fn_sh int) string {
 	} else {
 		// Build an object, assign each field.
 		tmp := xP.get_tmp()
-		mut obj_gen := strings.new_builder(300)
+		mut obj_gen := StringX.new_builder(300)
 		for i, field in fields {
 			mut cast := ''
 			if field.typ == 'int' {

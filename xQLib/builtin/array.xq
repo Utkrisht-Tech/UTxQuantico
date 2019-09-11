@@ -4,7 +4,7 @@
 
 module builtin
 
-import strings
+import StringX
 
 struct array {
 public:
@@ -177,7 +177,7 @@ fn (arr mut array) _push(val voidptr) {
 }
 
 // `val` is array.data
-// TODO make private, right now it's used by strings.Builder
+// TODO make private, right now it's used by StringX.Builder
 public fn (arr mut array) _push_many(val voidptr, size int) {
 	if arr.len >= arr.cap - size {
 		cap := (arr.len + size) * 2
@@ -228,7 +228,7 @@ public fn (a array) free() {
 
 // "[ 'a', 'b', 'c' ]"
 public fn (a []string) str() string {
-	mut sb := strings.new_builder(a.len * 3)
+	mut sb := StringX.new_builder(a.len * 3)
 	sb.write('[')
 	for i := 0; i < a.len; i++ {
 		val := a[i]

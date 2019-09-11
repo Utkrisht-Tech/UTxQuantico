@@ -4,7 +4,7 @@
 
 module main
 
-import strings
+import StringX
 
 const (
 	MaxLocalVars = 50
@@ -969,7 +969,7 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 
 // "fn (int, string) int"
 fn (f Fn) typ_str() string {
-	mut sb := strings.new_builder(50)
+	mut sb := StringX.new_builder(50)
 	sb.write('fn (')
 	for i, arg in f.args {
 		sb.write(arg.typ)

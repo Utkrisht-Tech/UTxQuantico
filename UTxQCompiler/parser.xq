@@ -7,7 +7,7 @@ module main
 import (
 	os
 	rand
-	strings
+	StringX
 )
 
 struct Parser {
@@ -945,7 +945,7 @@ fn (xP mut Parser) get_type() string {
 		xP.error('unknown type `$typ`')
 	}
 	if star {
-		typ += strings.repeat(`*`, nr_stars)
+		typ += StringX.repeat(`*`, nr_stars)
 	}
 	// Register an []array type
 	if is_arr2 {
@@ -3110,7 +3110,7 @@ fn (xP mut Parser) if_statement(is_expr bool, elif_depth int) string {
 		xP.inside_if_expr = false
 		if is_expr {
 			xP.check_types(first_typ, typ)
-			xP.gen(strings.repeat(`)`, elif_depth + 1))
+			xP.gen(StringX.repeat(`)`, elif_depth + 1))
 		}
 		else_returns := xP.returns
 		xP.returns = if_returns && else_returns
@@ -3188,7 +3188,7 @@ fn (xP mut Parser) for_statement() {
 		xP.genln('$typ $tmp = $expr ;')
 		pad := if is_arr { 6 } else  { 4 }
 		var_typ := if is_str { 'byte' } else { typ.right(pad) }
-		// typ = strings.Replace(typ, "_ptr", "*", -1)
+		// typ = StringX.Replace(typ, "_ptr", "*", -1)
 		// Register temp var
 		val_var := Var {
 			name: val
@@ -3461,7 +3461,7 @@ fn (xP mut Parser) match_statement(is_expr bool) string {
 					xP.check(.RCBR)
 				}
 
-				xP.gen(strings.repeat(`)`, i+1))
+				xP.gen(StringX.repeat(`)`, i+1))
 
 				return res_typ
 			} else {

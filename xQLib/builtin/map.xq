@@ -4,7 +4,7 @@
 
 module builtin
 
-import strings
+import StringX
 
 struct map {
 	element_size int
@@ -245,7 +245,7 @@ public fn (m map_string) str() string {
 	if m.size == 0 {
 		return '{}'
 	}
-	mut sb := strings.new_builder(50)
+	mut sb := StringX.new_builder(50)
 	sb.writeln('{')
 	for key, val  in m {
 		sb.writeln('  "$key" => "$val"')

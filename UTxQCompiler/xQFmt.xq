@@ -4,14 +4,14 @@
 
 module main
 
-import strings
+import StringX
 
 // format helpers
 
 fn (scanner mut Scanner) fgen(s string) {
 	mut st := s
 	if scanner.format_line_empty {
-		st = strings.repeat(`\t`, scanner.format_indent) + st
+		st = StringX.repeat(`\t`, scanner.format_indent) + st
 	}
 	scanner.format_out.write(st)
 	scanner.format_line_empty = false
@@ -20,7 +20,7 @@ fn (scanner mut Scanner) fgen(s string) {
 fn (scanner mut Scanner) fgenln(s string) {
 	mut st := s
 	if scanner.format_line_empty {
-		st = strings.repeat(`\t`, scanner.format_indent) + st
+		st = StringX.repeat(`\t`, scanner.format_indent) + st
 	}
 	scanner.format_out.writeln(st)
 	scanner.format_line_empty = true

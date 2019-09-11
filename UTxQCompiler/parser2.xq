@@ -4,7 +4,7 @@
 
 module main
 
-import strings
+import StringX
 
 fn (xP mut Parser) get_type2() Type {
 	mut star := false
@@ -149,7 +149,7 @@ fn (xP mut Parser) get_type2() Type {
 		xP.error('unknown type `$typ`')
 	}
 	if star {
-		typ += strings.repeat(`*`, nr_stars)
+		typ += StringX.repeat(`*`, nr_stars)
 	}
 	// Register an []array type
 	if is_arr2 {

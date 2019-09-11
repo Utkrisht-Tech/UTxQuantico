@@ -4,10 +4,10 @@
 
 module csv
 
-import strings
+import StringX
 
 struct Writer {
-	sb strings.Builder
+	sb StringX.Builder
 public:
 mut:
 	use_crlf bool
@@ -17,7 +17,7 @@ mut:
 public fn new_writer() &Writer {
 	return &Writer{
 		delimiter: `,`,
-		sb: strings.new_builder(200)
+		sb: StringX.new_builder(200)
 	}
 }
 

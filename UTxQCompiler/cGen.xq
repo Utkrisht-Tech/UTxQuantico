@@ -5,7 +5,7 @@
 module main
 
 import os
-import strings
+import StringX
 import time
 
 struct CGen {
@@ -13,7 +13,7 @@ struct CGen {
 	out_path   		  string
 	//types       	[]string
 	thread_fns   		[]string
-	//buf        	  strings.Builder
+	//buf        	  StringX.Builder
 	is_user      		bool
 mut:
 	lines        		[]string
@@ -48,7 +48,7 @@ fn new_cgen(out_name_c string) &CGen {
 	gen := &CGen {
 		out_path: path
 		out: out
-		//buf: strings.new_builder(10000)
+		//buf: StringX.new_builder(10000)
 		lines: _make(0, 1000, sizeof(string))
 	}
 	return gen
@@ -319,7 +319,7 @@ fn (xQ mut UTxQ) c_type_definitions() string {
 }
 
 fn types_to_c(types []Type, table &dataTable) string {
-	mut sb := strings.new_builder(10)
+	mut sb := StringX.new_builder(10)
 	for t in types {
 		if t.cat != .union && t.cat != .struct {
 			continue

@@ -29,7 +29,7 @@ public fn(graph &DepGraph) imports() []string {
 	return mods
 }
 
-// 'strings' => 'XQROOT/xQLib/strings'
+// 'StringX' => 'XQROOT/xQLib/StringX'
 // 'installed_mod' => '~/.xQModules/installed_mod'
 // 'local_mod' => '/path/to/current/dir/local_mod'
 fn (xQ &UTxQ) find_module_path(mod string) string {

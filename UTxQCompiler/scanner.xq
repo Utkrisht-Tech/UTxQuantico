@@ -5,7 +5,7 @@
 module main
 
 import os
-import strings
+import StringX
 
 struct Scanner {
 mut:
@@ -21,7 +21,7 @@ mut:
 	mline_comment           string
 	is_started              bool
 	// xQFormatter
-	format_out              strings.Builder
+	format_out              StringX.Builder
 	format_indent           int
 	format_line_empty       bool
 	prev_tk                 Token
@@ -57,7 +57,7 @@ fn new_scanner(file_path string) &Scanner {
 	scanner := &Scanner {
 		file_path: file_path
 		text: text
-		format_out: strings.new_builder(1000)
+		format_out: StringX.new_builder(1000)
 		should_print_line_on_error: true
 	}
 
@@ -654,7 +654,7 @@ fn (sc &Scanner) error(message string) {
 		// The pointerline should have the same spaces/tabs as the offending
 		// line, so that it prints the ^ character exactly on the *same spot*
 		// where it is needed. That is the reason we can not just
-		// use strings.repeat(` `, column) to form it.
+		// use StringX.repeat(` `, column) to form it.
 		pointerline := line.clone()
 		mut pl := pointerline.str
 		for i,c in line {

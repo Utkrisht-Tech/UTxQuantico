@@ -233,18 +233,18 @@ fn (xP mut Parser) gen_array_str(typ Type) {
 	}
 	xP.cgen.fns << '
 	string ${t}_str($t a) {
-		strings__Builder sb = strings__new_builder(a.len * 3);
-		strings__Builder_write(&sb, tos2("[")) ;
+		StringX__Builder sb = StringX__new_builder(a.len * 3);
+		StringX__Builder_write(&sb, tos2("[")) ;
 		for (int i = 0; i < a.len; i++) {
-			strings__Builder_write(&sb, ${elm_type}_str( (($elm_type *) a.data)[i]));
+			StringX__Builder_write(&sb, ${elm_type}_str( (($elm_type *) a.data)[i]));
 
 			if (i < a.len - 1) {
-			strings__Builder_write(&sb, tos2(", ")) ;
+			StringX__Builder_write(&sb, tos2(", ")) ;
 
 			}
 		}
-		strings__Builder_write(&sb, tos2("]")) ;
-		return strings__Builder_str(sb);
+		StringX__Builder_write(&sb, tos2("]")) ;
+		return StringX__Builder_str(sb);
 	} '
 }
 

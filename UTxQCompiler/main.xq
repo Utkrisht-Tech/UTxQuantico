@@ -7,7 +7,7 @@ module main
 import (
 	os
 	time
-	strings
+	StringX
 )
 
 const (
@@ -276,7 +276,7 @@ fn (xQ mut UTxQ) compile() {
 	}
 	xQ.log('Done parsing.')
 	// Write everything
-	mut d := strings.new_builder(10000)// Avoid unnecessary allocations
+	mut d := StringX.new_builder(10000)// Avoid unnecessary allocations
 	d.writeln(cgen.includes.join_lines())
 	d.writeln(cgen.typedefs.join_lines())
 	d.writeln(xQ.c_type_definitions())
