@@ -100,13 +100,13 @@ mut:
 	building_xQ	   bool
 }
 
-
 fn main() {
 	// There's no `flags` module yet, so args have to be parsed manually
 	args := env_xQFlags_and_os_args()
 	// Print the version and exit.
 	if '-v' in args || '--version' in args || 'version' in args {
-		println('UTxQ $Version')
+		version_hash := verHash()
+		println('UTxQuantico $Version $version_hash')
 		return
 	}
 	if '-h' in args || '--help' in args || 'help' in args {
@@ -148,16 +148,7 @@ fn main() {
 */
 	// Just fmt and exit
 	if 'fmt' in args {
-		file := args.last()
-		if !os.file_exists(file) {
-			println('"$file" does not exist')
-			exit(1)
-		}
-		if !file.ends_with('.xq') {
-			println('xQ fmt can only be used on .xq files')
-			exit(1)
-		}
-		println('xQFmt is temporarily disabled')
+		xQFmt(args)
 		return
 	}
 	// xQ get sqlite
@@ -229,6 +220,12 @@ fn (xQ mut UTxQ) compile() {
 	cgen.cp = CheckPoint.main
 	if xQ.pref.is_debug {
 		cgen.genln('#define XQDEBUG (1) ')
+	}
+
+	if xQ.pref.building_xQ {
+		cgen.genln('#ifndef UTXQ_COMMIT_HASH')
+		cgen.genln('#define UTXQ_COMMIT_HASH "' + verHash() + '"')
+		cgen.genln('#endif')
 	}
 
 	cgen.genln(CommonCHeaders)
@@ -784,6 +781,9 @@ fn new_xQ(args[]string) &UTxQ {
 		}
 	}
 
+	rdir := os.realpath( dir )
+	rdir_name := os.filename( rdir )
+
 	is_obfuscated := args.contains('-obf')
 	is_repl:=args.contains('-repl')
 	pref := &Preferences {
@@ -806,7 +806,7 @@ fn new_xQ(args[]string) &UTxQ {
 		build_mode: build_mode
 		cflags: cflags
 		ccompiler: find_c_compiler()
-		building_xQ: !is_repl && (dir == 'UTxQCompiler'  ||
+		building_xQ: !is_repl && (rdir_name == 'UTxQCompiler'  ||
 			dir.contains('UTxQ/xQLib'))
 	}
 	if pref.is_verbose || pref.is_debug {
@@ -900,6 +900,19 @@ fn update_UTxQ() {
 	}
 }
 
+fn xQFmt(args[]string) {
+	file := args.last()
+	if !os.file_exists(file) {
+		println('"$file" does not exist')
+		exit(1)
+	}
+	if !file.ends_with('.xq') {
+		println('xQFmt can only be used on .xq files')
+		exit(1)
+	}
+	println('xQFmt is temporarily disabled')
+}
+
 fn install_UTxQ(args[]string) {
 	if args.len < 3 {
 		println('usage: xQ install [module] [module] [...]')
@@ -908,10 +921,10 @@ fn install_UTxQ(args[]string) {
 	names := args.slice(2, args.len)
 	xQExec := os.executable()
 	xQRoot := os.dir(xQExec)
-	xQGet := '$xQRoot/tools/xQGet'
+	xQGet := '$xQRoot/xQTools/xQGet'
 	if true {
 		//println('Building xQGet...')
-		os.chdir(xQRoot + '/tools')
+		os.chdir(xQRoot + '/xQTools')
 		xQGetcompilation := os.exec('$xQExec -o $xQGet xQGet.xq') or {
 			cerror(err)
 			return
@@ -999,8 +1012,15 @@ fn create_symlink() {
 	}
 }
 
-pub fn cerror(s string) {
+public fn cerror(s string) {
 	println('UTxQ error: $s')
 	os.flush_stdout()
 	exit(1)
+}
+
+fn verHash() string {
+	mut buf := [50]byte
+	buf[0] = 0
+	C.snprintf(buf, 50, '%s', C.UTXQ_COMMIT_HASH )
+	return tos_clone(buf)
 }

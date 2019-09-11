@@ -51,7 +51,8 @@ fn (R mut Repl) function_call(line string) bool {
 }
 
 fn repl_help() {
-println('UTxQ $Version
+version_hash := verHash()
+println('UTxQuantico $Version $version_hash
   help                   Displays this information.
   Ctrl-C, Ctrl-D, exit   Exits the REPL.
   clear                  Clears the screen.
@@ -59,7 +60,8 @@ println('UTxQ $Version
 }
 
 fn run_repl() []string {
-	println('UTxQ $Version')
+	version_hash := verHash()
+	println('UTxQuantico $Version $version_hash')
 	println('Use Ctrl-C or `exit` to exit')
 	file := '.xQRepl.xq'
 	temp_file := '.xQRepl_temp.xq'

@@ -451,6 +451,7 @@ fn (sc mut Scanner) scan() ScanRes {
 	  // @FILE => will be substituted with the path of the UTxQ source file
 	  // @LINE_NO_Y => will be substituted with the UTxQ line number where it appears (as a string)
 	  // @COLUMN_X => will be substituted with the column where it appears (as a string).
+	  // @VERHASH  => will be substituted with the shortened commit hash of the UTxQCompiler (as a string).
 	  // This allows things like this: 
 	  // println( 'file: ' + @FILE + ' | line: ' + @LINE_NO_Y + ' | column: ' + @COLUMN_X + ' | fn: ' + @FN)
 	  // ... useful while debugging/tracing
@@ -458,6 +459,7 @@ fn (sc mut Scanner) scan() ScanRes {
 	  if name == 'FILE' { return scan_res(.str, os.realpath(sc.file_path)) }
 	  if name == 'LINE_NO_Y' { return scan_res(.str, (sc.line_no_y+1).str()) }
 	  if name == 'COLUMN_X' { return scan_res(.str, (sc.current_column()).str()) }
+	  if name == 'VERHASH' { return scan_res(.str, verHash()) }
       if !is_key(name) {
          return scan_res(.AT, '')
       // sc.error('@ must be used before keywords (e.g. `@type string`)')

@@ -37,11 +37,11 @@ mut:
 }
 
 enum AccessMod {
-	pri            // Private Immutable
-	priMUT         // Private Mutable
-	pub            // Public Immutable (read only)
-	pubMUT         // Public, but Mutable only in current module
-	pubDMUT        // Public and Dual Mutable (NOT Safe Always)
+	private            // Private Immutable
+	privateMUT         // Private Mutable
+	public             // Public Immutable (read only)
+	publicMUT      	   // Public, but Mutable only in current module
+	publicDMUT         // Public and Dual Mutable (NOT Safe Always)
 }
 
 enum TypeCategory {
