@@ -779,7 +779,8 @@ fn (sc mut Scanner) identify_char() string {
 			sc.error('Invalid character literal (more than one character: $len)')
 		}
 	}
-	return ch
+	// Escape a `'` character
+	return if ch == '\'' { '\\' + ch } else { ch }
 }
 
 fn (sc mut Scanner) peek() Token {

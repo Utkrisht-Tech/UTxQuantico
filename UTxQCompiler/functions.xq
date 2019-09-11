@@ -423,7 +423,7 @@ fn (xP mut Parser) fn_decl() {
 	}
 	if f.name == 'main' || f.name == 'WinMain' {
 		xP.genln('init_consts();')
-		if xP.table.imports.contains('os') {
+		if 'os' in xP.table.imports {
 			if f.name == 'main' {
 				xP.genln('os__args = os__init_os_args(argc, argv);')
 			}
@@ -604,6 +604,9 @@ fn (xP mut Parser) async_fn_call(f Fn, method_sh int, receiver_var, receiver_typ
 
 fn (xP mut Parser) fn_call(f Fn, method_sh int, receiver_var, receiver_type string) {
 	if !f.is_public &&  !f.is_c && !xP.pref.is_test && !f.is_interface && f.mod != xP.mod  {
+		if f.name == 'contains' {
+			println('use `value in data` instead of `data.contains(value)`')
+		}
 		xP.error('function `$f.name` is private')
 	}
 	xP.calling_c = f.is_c

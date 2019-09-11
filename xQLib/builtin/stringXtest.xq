@@ -414,3 +414,8 @@ fn testXfor_loop_two() {
 		assert c == s[i]
 	}
 }
+
+fn testXquote() {
+	a := `'`
+	assert a.str() == '\''
+}

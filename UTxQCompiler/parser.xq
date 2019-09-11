@@ -175,7 +175,7 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 		for xP.tk == .key_import && xP.peek() != .key_const {
 			xP.imports()
 		}
-		if xP.table.imports.contains('builtin') {
+		if 'builtin' in xP.table.imports {
 			xP.error('module `builtin` cannot be imported')
 		}
 		// save Parsed imports table
@@ -363,7 +363,7 @@ fn (xP mut Parser) import_statement() {
 	// add import to file scope import table
 	xP.import_table.register_alias(mod_alias, mod)
 	// Make sure there are no duplicate imports
-	if xP.table.imports.contains(mod) {
+	if mod in xP.table.imports {
 		return
 	}
 	xP.log('adding import $mod')
@@ -2872,7 +2872,7 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 			if !xP.first_cp() && !t.has_field(field) {
 				xP.error('`$t.name` has no field `$field`')
 			}
-			if inited_fields.contains(field) {
+			if field in inited_fields {
 				xP.error('already initialized field `$field` in `$t.name`')
 			}
 			f := t.find_field(field)
@@ -2898,7 +2898,7 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 		for i, field in t.fields {
 			// println('### field.name')
 			// Skip if this field has already been assigned to
-			if inited_fields.contains(field.name) {
+			if field.name in inited_fields {
 				continue
 			}
 			field_typ := field.typ

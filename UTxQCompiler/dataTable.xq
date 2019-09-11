@@ -243,7 +243,7 @@ fn new_table(is_obfuscated bool) &dataTable {
 
 // If `name` is a reserved C keyword, returns `xQ_name` instead.
 fn (t mut dataTable) var_cgen_name(name string) string {
-	if CReserved.contains(name) {
+	if name in CReserved {
 		return 'xQ_$name'
 	}
 	else {
@@ -252,7 +252,7 @@ fn (t mut dataTable) var_cgen_name(name string) string {
 }
 
 fn (t mut dataTable) register_module(mod string) {
-	if t.modules.contains(mod) {
+	if mod in t.modules {
 		return
 	}
 	t.modules << mod
@@ -710,7 +710,7 @@ fn (table mut dataTable) cgen_name(f &Fn) string {
 	// Avoid name conflicts (with things like abs(), print() etc).
 	// Generate b_abs(), b_print()
 	// TODO duplicate functionality
-	if f.mod == 'builtin' && CReserved.contains(f.name) {
+	if f.mod == 'builtin' && f.name in CReserved {
 		return 'xQ_$name'
 	}
 	// Obfuscate but skip certain names

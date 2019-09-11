@@ -56,7 +56,7 @@ Subcommands:
 
 /*
 - To disable automatic formatting:
-xQ -nofmt file.xq
+xQ -noxQFmt file.xq
 - Build a program with an embedded xQLib  (Do this if you do not have prebuilt xQLib libraries or if you are developing for xQLib)
 xQ -embed_xQLib file.xq
 */

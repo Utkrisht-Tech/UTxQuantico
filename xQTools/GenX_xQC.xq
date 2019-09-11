@@ -218,7 +218,7 @@ fn (GenX_xQC mut GenXQC) generate() {
 		GenX_xQC.cmd_exec('git -C $git_Repo_dir_UTxQ fetch')
 		git_Status := GenX_xQC.cmd_exec('git -C $git_Repo_dir_UTxQ status')
 		if !git_Status.contains('behind') {
-			GenX_xQC.logger.warn('UTxQuantico repository is already up to date.')
+			GenX_xQC.logger.warning('UTxQuantico repository is already up to date.')
 			return
 		}
 	}
@@ -258,7 +258,7 @@ fn (GenX_xQC mut GenXQC) generate() {
 	
 	// If X repo already has a newer commit than the UTxQuantico repo, assume it's up to date
 //	if t_unix_X >= t_unix_UTxQ {
-//		GenX_xQC.logger.warn('X repository is already up to date.')
+//		GenX_xQC.logger.warning('X repository is already up to date.')
 //		return
 //	}
 
