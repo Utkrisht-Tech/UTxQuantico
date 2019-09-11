@@ -119,6 +119,7 @@ fn (xQ mut UTxQ) XCompiler() {
 		a << '-mmacosx-version-min=10.7'
 	}
 	cflags := xQ.get_os_cflags()
+
 	// Add .o files
 	for flag in cflags {
 		if !flag.value.ends_with('.o') { continue }
@@ -315,6 +316,20 @@ fn find_c_compiler_default() string {
 }
 
 fn find_c_compiler_thirdparty_options() string {
-	$if windows { return '' }
-	return '-fPIC'
+	if '-m32' in os.args {
+		$if windows {
+			return '-m32'
+		}
+		$else {
+			return '-fPIC -m32'
+		}
+	}
+	else {
+		$if windows {
+			return ''
+		}
+		$else {
+			return '-fPIC'
+		}
+	}
 }
