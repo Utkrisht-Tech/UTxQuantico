@@ -2336,10 +2336,6 @@ fn (xP mut Parser) factor() string {
 		xP.next()
 		xP.check(.LPAR)
 		mut sizeof_typ := xP.get_type()
-		if sizeof_typ.ends_with('*') {
-			// Move * from the end to the beginning, as C requires
-			sizeof_typ = '*' + sizeof_typ.left(sizeof_typ.len - 1)
-		}
 		xP.check(.RPAR)
 		xP.gen('$sizeof_typ)')
 		xP.fgen('$sizeof_typ)')

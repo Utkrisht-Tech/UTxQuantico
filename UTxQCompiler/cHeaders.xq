@@ -28,7 +28,9 @@ CommonCHeaders = '
 #endif
 
 #ifdef __linux__
+#ifdef __BIONIC__
 #include <execinfo.h> // backtrace and backtrace_symbols_fd
+#endif
 #pragma weak backtrace
 #pragma weak backtrace_symbols_fd
 #endif

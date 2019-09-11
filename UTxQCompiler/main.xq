@@ -114,7 +114,7 @@ fn main() {
 		return
 	}
 	if 'translate' in args {
-		println('Translating C to UTxQ will be available in V 0.2')
+		println('Translating C to UTxQ will be available in v1.0')
 		return
 	}
 	if 'update' in args {
@@ -122,7 +122,7 @@ fn main() {
 		return
 	}
 	if 'get' in args {
-		println('use `xQ install` to install modules from xQpm.UTxQ.io')
+		println('use `xQ install` to install modules from xQpm.UTxQ.io ')
 		return
 	}
 	if 'symlink' in args {
@@ -829,37 +829,6 @@ fn new_xQ(args[]string) &UTxQ {
 		mod: mod
 	}
 }
-
-
-const (
-	HelpText = '
-Usage: xQ [options] [file | directory]
-Options:
-  -                 Read from stdin (Default; Interactive mode if in a tty)
-  -h, help          Display this information.
-  -v, version       Display compiler version.
-  -prod             Build an optimized executable.
-  -o <file>         Place output into <file>.
-  -obf              Obfuscate the resulting binary.
-  -show_c_cmd       Print the full C compilation command and how much time it took.
-  -debug            Leave a C file for debugging in .program.c.
-  -live             Enable hot code reloading (required by functions marked with [live]).
-  fmt               Run xQFmt to format the source code.
-  update            Update UTxQuantico.
-  run               Build and execute a UTxQ program. You can add arguments after the file name.
-	build module      Compile a module into an object file.
-Files:
-  <file>_test.xq     Test file.
-'
-)
-
-/*
-- To disable automatic formatting:
-xQ -noxQFmt file.xq
-- To build a program with an embedded xQLib  (use this if you do not have prebuilt xQLib libraries or if you
-are working on xQLib)
-xQ -embed_xQLib file.xq
-*/
 
 fn env_xQFlags_and_os_args() []string {
    mut args := []string
