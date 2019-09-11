@@ -2,9 +2,9 @@
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
-module hash
+module HashX
 
-interface Hash {
+interface HashX {
 	// Sum appends the current hash to b and returns the resulting array.
 	// It does not change the underlying hash state.
 	sum(b []byte) []byte
@@ -12,10 +12,10 @@ interface Hash {
 	block_size() int
 }
 
-interface Hash32 {
+interface HashX32 {
 	sum32() u32
 }
 
-interface Hash64 {
+interface HashX64 {
 	sum64() u64
 }

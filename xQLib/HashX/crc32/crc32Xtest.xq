@@ -2,9 +2,9 @@
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
-import hash.crc32
+import HashX.crc32
 
-fn testXhash_crc32() {
+fn testXHashX_crc32() {
 	b1 := 'testing crc32'.bytes()
 	sum1 := crc32.sum(b1)
 	assert sum1 == u32(1212124400)
