@@ -12,9 +12,32 @@ import (
 fn (xQ mut UTxQ) XCompiler() {
 	// build any thirdparty obj files
 	xQ.build_thirdparty_obj_files()
-
-	// Just create a c file and exit
-	if xQ.out_name.ends_with('.c') {
+	
+	// Just create a C/JavaScript file and exit
+	if xQ.out_name.ends_with('.c') || xQ.out_name.ends_with('.js') {
+		// Translating UTxQ code to JS by launching xQJS
+		$if !js {
+			if xQ.out_name.ends_with('.js') {
+				xQExe := os.executable()
+				xQJS_path := xQExe + 'js'
+				dir := os.dir(xQExe)
+				if !os.file_exists(xQJS_path) {
+					println('xQJS.js compiler not found, building...')
+					ret := os.system('$xQExe -o $xQJS_path -os js $dir/UTxQCompiler')
+					if ret == 0 {
+						println('Done.')
+					} else {
+						println('Failed.')
+						exit(1)
+					}	
+				}	
+				ret := os.system('$xQJS_path -o $xQ.out_name $xQ.dir')
+				if ret == 0 {
+					println('Done! Run it with `node $xQ.out_name`')
+					println('JS backend is at a very early stage.')
+				}	
+			}
+		}
 		os.mv(xQ.out_name_c, xQ.out_name)
 		exit(0)
 	}
@@ -41,6 +64,10 @@ fn (xQ mut UTxQ) XCompiler() {
 		xQ.out_name = xQ.out_name + '.so'
 	}
 	if xQ.pref.build_mode == .build_module {
+		// Create the modules directory if it's not there.
+		if !os.file_exists(ModPath)  {
+			os.mkdir(ModPath)
+		}
 		xQ.out_name = ModPath + xQ.dir + '.o' //xQ.out_name
 		println('Building ${xQ.out_name}...')
 	}
@@ -142,9 +169,11 @@ fn (xQ mut UTxQ) XCompiler() {
 			a << ' -ldl '
 		}
 	}
-	if xQ.os == .windows {
-		a << '-DUNICODE -D_UNICODE'
+
+	if xQ.os == .js && os.user_os() == 'linux' {
+		a << '-lm'
 	}
+
 	args := a.join(' ')
 	cmd := '${xQ.pref.ccompiler} $args'
 	// Run
@@ -260,7 +289,7 @@ fn (c mut UTxQ) XCompiler_windows_cross() {
 	obj_name = obj_name.replace('.exe', '')
 	obj_name = obj_name.replace('.o.o', '.o')
 	include := '-I $winroot/include '
-	cmd := 'clang -o $obj_name -w $include -DUNICODE -D_UNICODE -m32 -c -target x86_64-win32 $ModPath/$c.out_name_c'
+	cmd := 'clang -o $obj_name -w $include -m32 -c -target x86_64-win32 $ModPath/$c.out_name_c'
 	if c.pref.show_c_cmd {
 			println(cmd)
 	}

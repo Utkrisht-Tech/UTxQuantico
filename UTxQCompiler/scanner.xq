@@ -48,7 +48,7 @@ fn new_scanner(file_path string) &Scanner {
 		if c_text[0] == 0xEF && c_text[1] == 0xBB && c_text[2] == 0xBF {
 			// skip three BOM bytes
 			offset_ln := 3    // length to offset from begin
-			raw_text = tos(c_text[offset_ln], C.strlen(c_text) - offset_ln)
+			raw_text = tos(c_text[offset_ln], xQStrlen(c_text) - offset_ln)
 		}
 	}
 
@@ -452,7 +452,7 @@ fn (sc mut Scanner) scan() ScanRes {
 	  // @LINE_NO_Y => will be substituted with the UTxQ line number where it appears (as a string)
 	  // @COLUMN_X => will be substituted with the column where it appears (as a string).
 	  // @VERHASH  => will be substituted with the shortened commit hash of the UTxQCompiler (as a string).
-	  // This allows things like this: 
+	  // This allows things like this:
 	  // println( 'file: ' + @FILE + ' | line: ' + @LINE_NO_Y + ' | column: ' + @COLUMN_X + ' | fn: ' + @FN)
 	  // ... useful while debugging/tracing
 	  if name == 'FN' { return scan_res(.str, sc.fn_name) }
@@ -651,7 +651,7 @@ fn (sc &Scanner) error(message string) {
 	linestart := sc.find_current_line_start_position()
 	lineend := sc.find_current_line_end_position()
 	column := sc.pos_x - linestart
-	if sc.should_print_line_on_error {
+	if sc.should_print_line_on_error && lineend > linestart {
 		line := sc.text.substr( linestart, lineend )
 		// The pointerline should have the same spaces/tabs as the offending
 		// line, so that it prints the ^ character exactly on the *same spot*
@@ -779,6 +779,9 @@ fn (sc mut Scanner) identify_char() string {
 			sc.error('Invalid character literal (more than one character: $len)')
 		}
 	}
+	if ch == '\\`' {
+		return '`'
+	}
 	// Escape a `'` character
 	return if ch == '\'' { '\\' + ch } else { ch }
 }
@@ -803,7 +806,7 @@ fn (sc mut Scanner) peek() Token {
 	return tk
 }
 
-fn (sc mut Scanner) expect(want string, start_pos int) bool {
+fn (sc &Scanner) expect(want string, start_pos int) bool {
 	end_pos := start_pos + want.len
 	if start_pos < 0 || start_pos >= sc.text.len {
 		return false
@@ -852,7 +855,7 @@ fn is_NEWLINE(ch byte) bool {
 	return ch == `\r` || ch == `\n`
 }
 
-fn (sc mut Scanner) get_opening_bracket() int {
+fn (sc &Scanner) get_opening_bracket() int {
 	mut pos := sc.pos_x
 	mut parentheses := 0
 	mut is_in_string := false

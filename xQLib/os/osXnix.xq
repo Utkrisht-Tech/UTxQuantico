@@ -11,6 +11,13 @@ const (
 	PathSeparator = '/'
 )
 
+fn init_os_args(argc int, argv &byteptr) []string {
+	mut args := []string
+	for i := 0; i < argc; i++ {
+		args << string(argv[i])
+	}		
+	return args
+}
 
 // get_error_msg(): Return error code representation in string.
 public fn get_error_msg(code int) string {
@@ -18,7 +25,7 @@ public fn get_error_msg(code int) string {
 	if _ptr_text == 0 {
 		return ''
 	}
-	return tos(_ptr_text, C.strlen(_ptr_text))
+	return tos(_ptr_text, xQStrlen(_ptr_text))
 }
 
 public fn ls(path string) []string {
@@ -35,7 +42,7 @@ public fn ls(path string) []string {
 		if isnull(ent) {
 			break
 		}
-		name := tos_clone(ent.d_name)
+		name := tos_clone(byteptr(ent.d_name))
 		if name != '.' && name != '..' && name != '' {
 			res << name
 		}

@@ -58,7 +58,7 @@ fn new_array_from_c_array_no_alloc(inpLen, cap, elem_size int, c_array voidptr) 
 }
 
 // Private function, used by UTxQ  (`[0; 100]`)
-fn array_repeat(val voidptr, no_of_repeats, elem_size int) array {
+fn array_repeat_old(val voidptr, no_of_repeats, elem_size int) array {
 	arr := array {
 		len: no_of_repeats
 		cap: no_of_repeats
@@ -67,6 +67,35 @@ fn array_repeat(val voidptr, no_of_repeats, elem_size int) array {
 	}
 	for i := 0; i < no_of_repeats; i++ {
 		C.memcpy(arr.data + i * elem_size, val, elem_size)
+	}
+	return arr
+}
+
+public fn (a array) repeat(no_of_repeats int) array {
+	arr := array {
+		len: no_of_repeats
+		cap: no_of_repeats
+		element_size: a.element_size
+		data: malloc(no_of_repeats * a.element_size)
+	}
+	val := a.data + 0 //no_of_repeats * a.element_size
+	for i := 0; i < no_of_repeats; i++ {
+		C.memcpy(arr.data + i * a.element_size, val, a.element_size)
+	}
+	return arr
+}
+
+// TODO remove
+public fn (a array) repeat2(no_of_repeats int) array {
+	arr := array {
+		len: no_of_repeats
+		cap: no_of_repeats
+		element_size: a.element_size
+		data: malloc(no_of_repeats * a.element_size)
+	}
+	val := a.data + 0 //no_of_repeats * a.element_size
+	for i := 0; i < no_of_repeats; i++ {
+		C.memcpy(arr.data + i * a.element_size, val, a.element_size)
 	}
 	return arr
 }
@@ -232,7 +261,9 @@ public fn (a []string) str() string {
 	sb.write('[')
 	for i := 0; i < a.len; i++ {
 		val := a[i]
-		sb.write('"$val"')
+		sb.write('"')
+		sb.write(val)
+		sb.write('"')
 		if i < a.len - 1 {
 			sb.write(', ')
 		}
@@ -245,7 +276,7 @@ public fn (b []byte) hex() string {
 	mut hex := malloc(b.len*2+1)
 	mut ptr := &hex[0]
 	for i := 0; i < b.len ; i++ {
-		ptr += C.sprintf(ptr, '%02x', b[i])
+		ptr += C.sprintf(*char(ptr), '%02x', b[i])
 	}
 	return string(hex)
 }

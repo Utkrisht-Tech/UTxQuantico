@@ -175,9 +175,23 @@ fn (xP mut Parser) chash() {
 		println('UTxQ script')
 		//xP.xQ_script = true
 	}
+	// Don't parse a non-JS UTxQ file (`#-js` flag)
+	else if hash == '-js'  {
+		$if js {
+			for xP.tk != .EOF {
+				xP.next()
+			}
+		} $else {
+			xP.next()
+		}
+	}
 	else {
-		if !xP.can_chash {
-			xP.error('bad token `#` (embedding C code is no longer supported)')
+		$if !js {
+			if !xP.can_chash {
+				println('hash="$hash"')
+				println(hash.starts_with('include'))
+				xP.error('bad token `#` (embedding C code is no longer supported)')
+			}
 		}
 		xP.genln(hash)
 	}
@@ -201,8 +215,8 @@ fn (xP mut Parser) comptime_method_call(typ Type) {
 	}
 	xP.check(.LPAR)
 	xP.check(.RPAR)
-	if xP.tk == .key_else_if {
-		xP.check(.key_else_if)
+	if xP.tk == .key_or_else {
+		xP.check(.key_or_else)
 		xP.genln('else {')
 		xP.check(.LCBR)
 		xP.statements()
@@ -246,8 +260,4 @@ fn (xP mut Parser) gen_array_str(typ Type) {
 		StringX__Builder_write(&sb, tos2("]")) ;
 		return StringX__Builder_str(sb);
 	} '
-}
-
-fn (xP mut Parser) parse_t() {
-
 }

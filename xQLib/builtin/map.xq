@@ -169,7 +169,7 @@ fn preorder_keys(node &mapnode, keys mut []string, key_i int) int {
 }
 
 public fn (m mut map) keys() []string {
-	mut keys := [''; m.size]
+	mut keys := [''].repeat2(m.size)
 	if isnull(m.root) {
 		return keys
 	}
@@ -211,7 +211,7 @@ public fn (m mut map) delete(key string) {
 	m.size--
 }
 
-public fn (m map) exists(key string) bool {
+public fn (m map) exists(key string) {
 	panic('map.exists(key) was removed from the language. Use `key in map` instead.')
 }
 
@@ -236,7 +236,24 @@ public fn (m map) print() {
 	println('>>>>>>>>>>')
 }
 
-public fn (m map) free() {
+fn (n mut mapnode) free() {
+	if n.val != 0 {
+		free(n.val)
+	}	
+	if n.left != 0 {
+		n.left.free()
+	}	
+	if n.right != 0 {
+		n.right.free()
+	}	
+	free(n)
+}
+
+public fn (m mut map) free() {
+	if m.root == 0 {
+		return
+	}	
+	m.root.free()
 	// C.free(m.table)
 	// C.free(m.keys_table)
 }

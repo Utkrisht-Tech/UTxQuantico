@@ -9,9 +9,9 @@ import StringX
 
 struct dataTable {
 mut:
-  modules                []string // List of all modules registered by the application
-  imports                []string // List of all imported libraries
-  typesmap               map[string]Type
+	modules                []string // List of all modules registered by the application
+	imports                []string // List of all imported libraries
+	typesmap               map[string]Type
 	consts                 []Var
 	fns                    map[string]Fn
 	generic_fns            []GenFnTable //map[string]GenFnTable // generic_fns['listen_and_serve'] == ['Blog', 'Forum']
@@ -19,7 +19,7 @@ mut:
 	cflags                 []CFlag //  ['-framework DotNet', '-WebGL']
 	fn_count               int // atomic
 	is_obfuscated          bool
-  obf_ids                map[string]int
+	obf_ids                map[string]int
 }
 
 struct GenFnTable {
@@ -45,7 +45,7 @@ enum AccessMod {
 }
 
 enum TypeCategory {
-  builtin
+	builtin
 	struct
 	function // 2
 	interface
@@ -53,37 +53,38 @@ enum TypeCategory {
 	union    // 5
 	c_struct
 	c_typedef
-  array
+	array
 }
 
 struct Var {
 mut:
-  typ             string
+	typ             string
 	name            string
 	is_arg          bool
 	is_const        bool
 	args            []Var // function args
 	attr            string //  [json] etc
-	is_mut          bool
+	is_mutable      bool
 	is_alloc        bool
 	is_returned		bool
 	ptr             bool
 	ref             bool
 	parent_fn       string // Variables can only be defined in functions
-	mod             string // module where this var is stored
+	mod             string // Module where this var is stored
 	line_no_y       int
 	access_mod      AccessMod
-	is_global       bool // global (translated from C only)
+	is_global       bool // Global (translated from C only)
 	is_used         bool
 	is_changed      bool
 	scope_level     int
+	is_c            bool // Remove once `typ` is `Type`, not string
 }
 
 struct Type {
 mut:
 	mod            string
 	name           string
-  cat            TypeCategory
+	cat            TypeCategory
 	fields         []Var
 	methods        []Fn
 	parent         string
@@ -100,8 +101,8 @@ mut:
 
 struct TypeNode {
 mut:
-  next &TypeNode
-  typ Type
+	next &TypeNode
+	typ Type
 }
 
 // For debugging types
@@ -127,6 +128,7 @@ fn (t Type) str() string {
 
 const (
 	CReserved = [
+		'delete',
 		'exit',
 		'unix',
 		//'print',
@@ -138,32 +140,21 @@ const (
 		'panic',
     // Complete list of C reserved words, from: https://en.cppreference.com/w/c/keyword
 		'auto',
-		'break',
-		'case',
 		'char',
-		'const',
-		'continue',
 		'default',
 		'do',
 		'double',
-		'else',
-		'enum',
 		'extern',
 		'float',
-		'for',
-		'goto',
-		'if',
 		'inline',
 		'int',
 		'long',
 		'register',
 		'restrict',
-		'return',
 		'short',
 		'signed',
 		'sizeof',
 		'static',
-		'struct',
 		'switch',
 		'typedef',
 		'union',
@@ -217,6 +208,7 @@ fn new_table(is_obfuscated bool) &dataTable {
 	t.register_type('size_t')
 	t.register_type_with_parent('i8', 'int')
 	t.register_type_with_parent('byte', 'int')
+	t.register_type_with_parent('char', 'int') // for C functions, to avoid warnings
 	t.register_type_with_parent('i16', 'int')
 	t.register_type_with_parent('u16', 'u32')
 	t.register_type_with_parent('u32', 'int')
@@ -242,7 +234,7 @@ fn new_table(is_obfuscated bool) &dataTable {
 }
 
 // If `name` is a reserved C keyword, returns `xQ_name` instead.
-fn (t mut dataTable) var_cgen_name(name string) string {
+fn (t &dataTable) var_cgen_name(name string) string {
 	if name in CReserved {
 		return 'xQ_$name'
 	}
@@ -301,7 +293,7 @@ fn (xQP mut Parser) register_global(name, typ string) {
 		is_const: true
 		is_global: true
 		mod: xQP.mod
-		is_mut: true
+		is_mutable: true
 	}
 }
 
@@ -437,6 +429,7 @@ fn (table mut dataTable) add_method(type_name string, f Fn) {
 		print_backtrace()
 		cerror('add_method: empty type')
 	}
+	// TODO table.typesmap[type_name].methods << f
 	mut t := table.typesmap[type_name]
 	t.methods << f
 	table.typesmap[type_name] = t
@@ -456,10 +449,9 @@ fn (table &dataTable) type_has_method(typ &Type, name string) bool {
 // TODO use `?Fn`
 
 fn (table &dataTable) find_method(typ &Type, name string) Fn {
-	// println('TYPE HAS METHOD $name')
 	// method := typ.find_method(name)
-  t := table.typesmap[typ.name]
-  method := t.find_method(name)
+	t := table.typesmap[typ.name]
+	method := t.find_method(name)
 	if method.name.len == 0 && typ.parent.len > 0 {
 		parent := table.find_type(typ.parent)
 		return parent.find_method(name)
@@ -636,39 +628,6 @@ fn (xP mut Parser) satisfies_interface(interface_name, _typ string, throw bool) 
 	return true
 }
 
-fn type_default(typ string) string {
-	if typ.starts_with('array_') {
-		return 'new_array(0, 1, sizeof( ${typ.right(6)} ))'
-	}
-	// Always set pointers to 0
-	if typ.ends_with('*') {
-		return '0'
-	}
-	// User struct defined in another module.
-	if typ.contains('__') {
-		return '{0}'
-	}
-	// Default values for other types are not needed because of mandatory initialization
-	switch typ {
-	case 'bool': return '0'
-	case 'string': return 'tos((byte *)"", 0)'
-	case 'i8': return '0'
-	case 'i16': return '0'
-	case 'i64': return '0'
-	case 'u16': return '0'
-	case 'u32': return '0'
-	case 'u64': return '0'
-	case 'byte': return '0'
-	case 'int': return '0'
-	case 'rune': return '0'
-	case 'f32': return '0.0'
-	case 'f64': return '0.0'
-	case 'byteptr': return '0'
-	case 'voidptr': return '0'
-	}
-	return '{0}'
-}
-
 fn (table &dataTable) is_interface(name string) bool {
 	if !(name in table.typesmap) {
 		return false
@@ -696,41 +655,6 @@ fn (t &dataTable) find_const(name string) Var {
 		}
 	}
 	return Var{}
-}
-
-fn (table mut dataTable) cgen_name(f &Fn) string {
-	mut name := f.name
-	if f.is_method {
-		name = '${f.receiver_typ}_$f.name'
-		name = name.replace(' ', '')
-		name = name.replace('*', '')
-		name = name.replace('+', 'plus')
-		name = name.replace('-', 'minus')
-	}
-	// Avoid name conflicts (with things like abs(), print() etc).
-	// Generate b_abs(), b_print()
-	// TODO duplicate functionality
-	if f.mod == 'builtin' && f.name in CReserved {
-		return 'xQ_$name'
-	}
-	// Obfuscate but skip certain names
-	// TODO ugly, fix
-	if table.is_obfuscated && f.name != 'main' && f.name != 'WinMain' && f.mod != 'builtin' && !f.is_c &&
-	f.mod != 'darwin' && f.mod != 'os' && !f.name.contains('window_proc') && f.name != 'gg__vec2' &&
-	f.name != 'build_token_str' && f.name != 'build_keys' && f.mod != 'json' &&
-	!name.ends_with('_str') && !name.contains('contains') {
-		mut idx := table.obf_ids[name]
-		// No such function yet, register it
-		if idx == 0 {
-			table.fn_cnt++
-			table.obf_ids[name] = table.fn_cnt
-			idx = table.fn_cnt
-		}
-		old := name
-		name = 'f_$idx'
-		println('$old ==> $name')
-	}
-	return name
 }
 
 // ('s', 'string') => 'string s'
@@ -782,7 +706,7 @@ fn (t mut dataTable) register_generic_fn(fn_name string) {
 	t.generic_fns << GenFnTable{fn_name, []string}
 }
 
-fn (t mut dataTable) fn_gen_types(fn_name string) []string {
+fn (t &dataTable) fn_gen_types(fn_name string) []string {
 	for _, f in t.generic_fns {
 		if f.fn_name == fn_name {
 			return f.types
@@ -925,4 +849,71 @@ fn (t &Type) contains_field_type(typ string) bool {
 					}
 				}
 				return false
+}
+
+// Check for a function / variable / module typo in `name`
+fn (table &dataTable) identify_typo(name string, current_fn &Fn, pit &ParsedImportsTable) string {
+	// Dont check if name is too short
+	if name.len < 2 { return '' }
+	min_match := 0.50 // for dice coefficient between 0.0 - 1.0
+	name_orig := name.replace('__', '.').replace('_dot_', '.')
+	mut output := ''
+	// Check functions
+	mut n := table.find_misspelled_fn(name, pit, min_match)
+	if n != '' {
+		output += '\n  * function: `$n`'
+	}
+	// Check function local variables
+	n = current_fn.find_misspelled_local_var(name_orig, min_match)
+	if n != '' {
+		output += '\n  * variable: `$n`'
+	}
+	// Check imported modules
+	n = table.find_misspelled_imported_mod(name_orig, pit, min_match)
+	if n != '' {
+		output += '\n  * module: `$n`'
+	}
+	return output
+}
+
+// Find function with closest name to `name`
+fn (table &dataTable) find_misspelled_fn(name string, pit &ParsedImportsTable, min_match f32) string {
+	mut closest := f32(0)
+	mut closest_fn := ''
+	n1 := if name.starts_with('main__') { name.right(6) } else { name }
+	for _, f in table.fns {
+		if n1.len - f.name.len > 2 || f.name.len - n1.len > 2 { continue }
+		if !(f.mod in ['', 'main', 'builtin']) {
+			mut mod_imported := false
+			for _, m in pit.imports {
+				if f.mod == m {
+					mod_imported = true
+					break
+				}
+			}
+			if !mod_imported { continue }
+		}
+		r := StringX.dice_coefficient(n1, f.name)
+		if r > closest {
+			closest = r
+			closest_fn = f.name
+		}
+	}
+	return if closest >= min_match { closest_fn } else { '' }
+}
+
+// Find imported module with closest name to `name`
+fn (table &dataTable) find_misspelled_imported_mod(name string, pit &ParsedImportsTable, min_match f32) string {
+	mut closest := f32(0)
+	mut closest_mod := ''
+	n1 := if name.starts_with('main.') { name.right(5) } else { name }
+	for alias, mod in pit.imports {
+		if (n1.len - alias.len > 2 || alias.len - n1.len > 2) { continue }
+		r := StringX.dice_coefficient(n1, alias)
+		if r > closest {
+			closest = r
+			closest_mod = '$alias ($mod)'
+		}
+	}
+	return if closest >= min_match { closest_mod } else { '' }
 }

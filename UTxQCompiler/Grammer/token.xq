@@ -109,7 +109,7 @@ enum Token {
 	key_default
 	key_defer
 	key_else
-	key_else_if
+	key_or_else
 	key_embed
 	key_enum
 	key_false
@@ -155,7 +155,7 @@ fn build_keys() map[string]int {
 
 // TODO remove once we have `enum Token { name('name') if('if') ... }`
 fn build_token_str() []string {
-	mut l := [''; NoOfTokens]
+	mut l := [''].repeat2(NoOfTokens)
 	l[Token.keywords_top] = ''
 	l[Token.keywords_bottom] = ''
 	l[Token.EOF] = '.EOF'
@@ -238,7 +238,7 @@ fn build_token_str() []string {
 	l[Token.key_default] = 'default'
 	l[Token.key_defer] = 'defer'
 	l[Token.key_else] = 'else'
-	l[Token.key_else_if] = 'or'
+	l[Token.key_or_else] = 'or'
 	l[Token.key_embed] = 'embed'
 	l[Token.key_enum] = 'enum'
 	l[Token.key_false] = 'false'

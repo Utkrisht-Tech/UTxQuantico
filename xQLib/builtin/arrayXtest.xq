@@ -51,7 +51,7 @@ fn testXshort() {
 }
 
 fn testXlarge() {
-	mut a := [0; 0]
+	mut a := [0].repeat(0)
 	for i := 0; i < 10000; i++ {
 		a << i
 	}
@@ -93,27 +93,27 @@ fn testXstrings() {
 }
 
 fn testXrepeat() {
-	a := [0; 3]
+	a := [0].repeat(3)
 	assert a.len == 3
 	assert a[0] == 0 && a[1] == 0 && a[2] == 0
-	b := [10; 3]
+	b := [10].repeat(3)
 	assert b.len == 3
 	assert b[0] == 10 && b[1] == 10 && b[2] == 10
 	{
-		mut aa := [1.1 ; 3]
+		mut aa := [1.1].repeat(3)
 		// FIXTHIS: assert aa[0] == 1.1 still not supported, need to implement
 		assert aa[0] == f32(1.1)
 		assert aa[1] == f32(1.1)
 		assert aa[2] == f32(1.1)
 	}
 	{
-		mut aa := [f32(1.1) ; 3]
+		mut aa := [f32(1.1)].repeat(3)
 		assert aa[0] == f32(1.1)
 		assert aa[1] == f32(1.1)
 		assert aa[2] == f32(1.1)
 	}
 	{
-		aa := [f64(1.1) ; 3]
+		aa := [f64(1.1)].repeat(3)
 		assert aa[0] == f64(1.1)
 		assert aa[1] == f64(1.1)
 		assert aa[2] == f64(1.1)
@@ -146,7 +146,7 @@ fn testXslice() {
 fn testXpush_many() {
 	mut a := [1, 2, 3]
 	b := [4, 5, 6]
-	a << b 
+	a << b
 	assert a.len == 6
     assert a.first() == 1
 	assert a[0] == 1
@@ -170,9 +170,10 @@ fn testXreverse() {
 
 const (
 	N = 5
-) 
+)
 
 fn testXfixed() {
+	/*
 	mut nums := [4]int 
 	assert nums[0] == 0 
 	assert nums[1] == 0 
@@ -182,29 +183,30 @@ fn testXfixed() {
 	assert nums[1] == 7 
 	///////
 	nums2 := [N]int 
-	assert nums2[N - 1] == 0 
+	assert nums2[N - 1] == 0
+	*/
 } 
 
 fn modify (numbers mut []int) {
         numbers[0] = 777
 }
 
-fn testXmut_slice() { 
+fn testXmut_slice() {
 	mut n := [1,2,3]
-	modify(mut n.left(2)) 
-	assert n[0] == 777 
-	modify(mut n.right(2)) 
-	assert n[2] == 777 
+	modify(mut n.left(2))
+	assert n[0] == 777
+	modify(mut n.right(2))
+	assert n[2] == 777
 	println(n)
 }
 
 fn testXclone() {
-	nums := [1, 2, 3, 4, 10] 
-	nums2 := nums.clone()  
-	assert nums2.len == 5 
-	assert nums2.str() == '[1, 2, 3, 4, 10]' 
-	assert nums.slice(1, 3).str() == '[2, 3]' 
-} 
+	nums := [1, 2, 3, 4, 10]
+	nums2 := nums.clone()
+	assert nums2.len == 5
+	assert nums2.str() == '[1, 2, 3, 4, 10]'
+	assert nums.slice(1, 3).str() == '[2, 3]'
+}
  
 fn testXdoubling() {
 	mut nums := [1, 2, 3, 4, 5]

@@ -262,10 +262,10 @@ public fn join(inp1 BitXSpace, inp2 BitXSpace) BitXSpace {
 	 * options:
 	 * (a) number of slots in output is the sum of inputs' slots. In this
 	 * case, the number of bits in the last slot of output is less than the
-	 * number of bits in second input (i.e. ), OR
+	 * number of bits in the second input (i.e. ), OR
 	 * (b) number of slots of output is the sum of inputs' slots less one
 	 * (i.e. less iterations needed). In this case, the number of bits in
-	 * the last slot of output is greater than the number of bits in second
+	 * the last slot of output is greater than the number of bits in the second
 	 * input.
 	 * If offset_bit is zero, no additional copies needed.
 	 */
@@ -484,7 +484,7 @@ public fn (instance mut BitXSpace) resize(new_size int) {
 	new_bitNSlots := bitNSlots_in(new_size)
 	old_size := instance.size
 	old_bitNSlots := bitNSlots_in(old_size)
-	mut xspace := [u32(0); new_bitNSlots]
+	mut xspace := [u32(0)].repeat(new_bitNSlots)
 	for i := 0; i < old_bitNSlots && i < new_bitNSlots; i++ {
 		xspace[i] = instance.xspace[i]
 	}

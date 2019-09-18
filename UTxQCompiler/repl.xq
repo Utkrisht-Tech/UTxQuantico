@@ -41,7 +41,7 @@ fn (R mut Repl) checks(line string) bool {
 	return R.in_fn || (was_indent && R.indent <= 0) || R.indent > 0
 }
 
-fn (R mut Repl) function_call(line string) bool {
+fn (R &Repl) function_call(line string) bool {
 	for function in R.functions_name {
 		if line.starts_with(function) {
 			return true

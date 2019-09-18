@@ -43,43 +43,31 @@ fn (f &Fn) find_var(name string) Var {
 }
 
 
-fn (f mut Fn) open_scope() {
-	f.defer_text << ''
-	f.scope_level++
+fn (xP mut Parser) open_scope() {
+	xP.cur_fn.defer_text << ''
+	xP.cur_fn.scope_level++
 }
 
-fn (f mut Fn) close_scope() {
-	f.scope_level--
-	f.defer_text = f.defer_text.left(f.scope_level + 1)
-}
-
-fn (f mut Fn) mark_var_used(var Var) {
-	for i, kv in f.local_vars {
+fn (xP mut Parser) mark_var_used(var Var) {
+	for i, kv in xP.cur_fn.local_vars {
 		if kv.name == var.name {
-			//mut ptr := &f.local_vars[i]
-			//ptr.is_used = true
-			f.local_vars[i].is_used = true
-			return
+			xP.cur_fn.local_vars[i].is_used = true
 		}
 	}
 }
 
-fn (f mut Fn) mark_var_returned(var Var) {
-	for i, vAr in f.local_vars {
+fn (xP mut Parser) mark_var_returned(var Var) {
+	for i, vAr in xP.cur_fn.local_vars {
 		if vAr.name == var.name {
-			f.local_vars[i].is_returned = true
-			return
+			xP.cur_fn.local_vars[i].is_returned = true
 		}
 	}
 }
 
-fn (f mut Fn) mark_var_changed(var Var) {
-	for i, kv in f.local_vars {
+fn (xP mut Parser) mark_var_changed(var Var) {
+	for i, kv in xP.cur_fn.local_vars {
 		if kv.name == var.name {
-			//mut ptr := &f.local_vars[i]
-			//ptr.is_used = true
-			f.local_vars[i].is_changed = true
-			// return
+			xP.cur_fn.local_vars[i].is_changed = true
 		}
 	}
 }
@@ -112,10 +100,10 @@ fn (xP mut Parser) is_sig() bool {
 	(xP.file_path.contains(ModPath))
 }
 
-fn new_fn(mod string, is_public bool) &Fn {
-	return &Fn {
+fn new_fn(mod string, is_public bool) Fn {
+	return Fn {
 		mod: mod
-		local_vars: [Var{}		; MaxLocalVars]
+		local_vars: [Var{}].repeat2(MaxLocalVars)
 		is_public: is_public
 	}
 
@@ -158,8 +146,9 @@ fn (xP mut Parser) fn_decl() {
 			println('xP.mod=$xP.mod')
 			xP.error('cannot define new methods on non-local type `$receiver_typ`')
 		}
-		// (a *Foo) instead of (a mut Foo) is a common mistake
-		if !xP.builtin_mod && receiver_typ.contains('*') {
+		// `(f *Foo)` instead of `(f mut Foo)` is a common mistake
+		//if !xP.builtin_mod && receiver_typ.contains('*') {
+		if receiver_typ.contains('*') {
 			t := receiver_typ.replace('*', '')
 			xP.error('use `($receiver_name mut $t)` instead of `($receiver_name *$t)`')
 		}
@@ -297,7 +286,7 @@ fn (xP mut Parser) fn_decl() {
 	}
 	// Generate `User_register()` instead of `register()`
 	// Internally it's still stored as "register" in type User
-	mut fn_name_cgen := xP.table.cgen_name(f)
+	mut fn_name_cgen := xP.table.fn_gen_name(f)
 	// Start generation of the function body
 	skip_main_in_test := f.name == 'main' && xP.pref.is_test
 	if !is_c && !is_live && !is_sig && !is_fn_header && !skip_main_in_test {
@@ -323,7 +312,7 @@ fn (xP mut Parser) fn_decl() {
 			}
 		}
 		else {
-			xP.genln('$dll_export_linkage$typ $fn_name_cgen($str_args) {')
+			xP.gen_fn_decl(f, typ, str_args)
 		}
 	}
 	if is_fn_header {
@@ -425,7 +414,7 @@ fn (xP mut Parser) fn_decl() {
 		xP.genln('init_consts();')
 		if 'os' in xP.table.imports {
 			if f.name == 'main' {
-				xP.genln('os__args = os__init_os_args(argc, argv);')
+				xP.genln('os__args = os__init_os_args(argc, (byteptr*)argv);')
 			}
 			else if f.name == 'WinMain' {
 				xP.genln('os__args = os__parse_windows_cmd_line(xPCmdLine);')
@@ -462,8 +451,10 @@ _thread_so = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&reload_so, 0, 0, 0);
 	// Profiling mode:- Start counting at the beginning of the function (save current time).
 	if xP.pref.is_prof && f.name != 'main' && f.name != 'time__ticks' {
 		xP.genln('double _PROF_START = time__ticks();//$f.name')
-		cgen_name := xP.table.cgen_name(f)
-		f.defer_text[f.scope_level] = '  ${cgen_name}_time += time__ticks() - _PROF_START;'
+		cgen_name := xP.table.fn_gen_name(f)
+		if f.defer_text.len > f.scope_level {
+			f.defer_text[f.scope_level] = '  ${cgen_name}_time += time__ticks() - _PROF_START;'
+		}
 	}
 	if is_generic {
 		// Don't need to generate body for the actual generic definition
@@ -477,7 +468,9 @@ _thread_so = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&reload_so, 0, 0, 0);
 	}
 	// Counting or not, always need to add defer before the end
 	if !xP.is_WebX {
-		xP.genln(f.defer_text[f.scope_level])
+		if f.defer_text.len > f.scope_level {
+			xP.genln(f.defer_text[f.scope_level])
+		}
 	}
 	if typ != 'void' && !xP.returns && f.name != 'main' && f.name != 'WinMain' {
 		xP.error('$f.name must return "$typ"')
@@ -551,16 +544,17 @@ fn (xP mut Parser) async_fn_call(f Fn, method_sh int, receiver_var, receiver_typ
 	mut did_gen_something := false
 	for i, arg in f.args {
 		arg_struct += '$arg.typ $arg.name ;'// Add another field (arg) to the tmp struct definition
-		str_args += 'arg->$arg.name'
+		str_args += 'arg $dot_ptr $arg.name'
 		if i == 0 && f.is_method {
-			xP.genln('$tmp_struct -> $arg.name =  $receiver_var ;')
+			xP.genln('$tmp_struct  $dot_ptr $arg.name =  $receiver_var ;')
 			if i < f.args.len - 1 {
 				str_args += ','
 			}
+			did_gen_something = true
 			continue
 		}
 		// Set the struct values (args)
-		xP.genln('$tmp_struct -> $arg.name =  ')
+		xP.genln('$tmp_struct $dot_ptr $arg.name =  ')
 		xP.expression()
 		xP.genln(';')
 		if i < f.args.len - 1 {
@@ -572,12 +566,12 @@ fn (xP mut Parser) async_fn_call(f Fn, method_sh int, receiver_var, receiver_typ
 
 	if !did_gen_something {
 		// Msvc doesn't like empty struct
-		arg_struct += 'EMPTY_STRUCT_DECLARATION'
+		arg_struct += 'EMPTY_STRUCT_DECLARATION;'
 	}
 
 	arg_struct += '} $arg_struct_name ;'
 	// Also register the wrapper, so we can use the original function without modifying it
-	fn_name = xP.table.cgen_name(f)
+	fn_name = xP.table.fn_gen_name(f)
 	wrapper_name := '${fn_name}_thread_wrapper'
 	wrapper_text := 'void* $wrapper_name($arg_struct_name * arg) {$fn_name( /*f*/$str_args );  }'
 	xP.cgen.register_thread_fn(wrapper_name, wrapper_text, arg_struct)
@@ -602,6 +596,7 @@ fn (xP mut Parser) async_fn_call(f Fn, method_sh int, receiver_var, receiver_typ
 	xP.check(.RPAR)
 }
 
+// xP.tk == fn_name
 fn (xP mut Parser) fn_call(f Fn, method_sh int, receiver_var, receiver_type string) {
 	if !f.is_public &&  !f.is_c && !xP.pref.is_test && !f.is_interface && f.mod != xP.mod  {
 		if f.name == 'contains' {
@@ -617,7 +612,7 @@ fn (xP mut Parser) fn_call(f Fn, method_sh int, receiver_var, receiver_type stri
 			xP.error('use `malloc()` instead of `C.malloc()`')
 		}
 	}
-	mut cgen_name := xP.table.cgen_name(f)
+	mut cgen_name := xP.table.fn_gen_name(f)
 	xP.next()
 	mut gen_type := ''
 	if xP.tk == .LESSER {
@@ -651,32 +646,16 @@ fn (xP mut Parser) fn_call(f Fn, method_sh int, receiver_var, receiver_type stri
 	// If we have a method shadow,
 	// we need to preappend "method(receiver, ...)"
 	else {
-		mut method_call := '${cgen_name}('
 		receiver := f.args.first()
+		//println('r=$receiver.typ RT=$receiver_type')
 		if receiver.is_mutable && !xP.expr_var.is_mutable {
-			println('$method_call  recv=$receiver.name recv_mutable=$receiver.is_mutable')
+			//println('$method_call  recv=$receiver.name recv_mutable=$receiver.is_mutable')
 			xP.error('`$xP.expr_var.name` is immutable, declare it with `mut`')
 		}
 		if !xP.expr_var.is_changed {
-			xP.cur_fn.mark_var_changed(xP.expr_var)
+			xP.mark_var_changed(xP.expr_var)
 		}
-		// if receiver is key_mutable or a ref (&), generate & for the first arg
-		if receiver.ref || (receiver.is_mutable && !receiver_type.contains('*')) {
-			method_call += '& /* ? */'
-		}
-		// generate deref (TODO copy paste later in fn_call_args)
-		if !receiver.is_mutable && receiver_type.contains('*') {
-			method_call += '*'
-		}
-		mut cast := ''
-		// Method returns (void*) => cast it to int, string, user etc
-		// number := *(int*)numbers.first()
-		if f.typ == 'void*' {
-			// array_int => int
-			cast = receiver_type.all_after('_')
-			cast = '*($cast*) '
-		}
-		xP.cgen.set_shadow(method_sh, '$cast $method_call')
+		xP.gen_method_call(receiver_type, f.typ, cgen_name, receiver, method_sh)
 	}
 	// foo<Bar>()
 	xP.fn_call_args(mut f)
@@ -768,14 +747,21 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 
 // foo *(1, 2, 3, mut bar)*
 fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
-	// xP.gen('(')
 	// println('fn_call_args() name=$f.name args.len=$f.args.len')
 	// C func. # of args is not known
-	// if f.name.starts_with('c_') {
 	xP.check(.LPAR)
 	if f.is_c {
 		for xP.tk != .RPAR {
-			xP.bool_expression()
+			//C.func(var1, var2.method())
+			//If the parameter calls a function or method that is not C,
+			//the value of xP.calling_c is changed
+			xP.calling_c = true
+			sh := xP.cgen.add_shadow()
+			typ := xP.bool_expression()
+			// Cast UTxQ byteptr to C char* (byte is unsigned in UTxQ, that led to C warnings)
+			if typ == 'byte*' {
+				xP.cgen.set_shadow(sh, '(char*)')
+			}	
 			if xP.tk == .COMMA {
 				xP.gen(', ')
 				xP.check(.COMMA)
@@ -785,7 +771,7 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 		return f
 	}
 	// add debug information to panic when -debug arg is passed
-	if xP.xQ.pref.is_debug && f.name == 'panic' {
+	if xP.xQ.pref.is_debug && f.name == 'panic' && !xP.is_js {
 		mod_name := xP.mod.replace('_dot_', '.')
 		fn_name := xP.cur_fn.name.replace('${xP.mod}__', '')
 		file_path := xP.file_path.replace('\\', '\\\\') // escape \
@@ -799,7 +785,7 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 		// println('$i) arg=$arg.name')
 		// Skip receiver, because it was already generated in the expression
 		if i == 0 && f.is_method {
-			if f.args.len > 1 {
+			if f.args.len > 1 && !p.is_js {
 				xP.gen(',')
 			}
 			continue
@@ -837,22 +823,25 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 				xP.error('`$arg.name` is a mutable argument, you need to provide a variable to modify: `$f.name(... mut a...)`')
 			}
 			if !var.is_changed {
-				xP.cur_fn.mark_var_changed(var)
+				xP.mark_var_changed(var)
 			}
 		}
 		xP.expected_type = arg.typ
 		typ := xP.bool_expression()
 		// Optimize `println`: replace it with `printf` to avoid extra allocations and
-		// function calls. `println(777)` => `printf("%d\n", 777)`
+		// function calls.
+		// `println(777)` => `printf("%d\n", 777)`
 		// (If we don't check for void, then UTxQ will compile `println(func())`)
 		if i == 0 && (f.name == 'println' || f.name == 'print')  && typ != 'string' && typ != 'void' {
 			T := xP.table.find_type(typ)
 			$if !windows {
+			$if !js {
 				fmt := xP.typ_to_format(typ, 0)
 				if fmt != '' {
 					xP.cgen.resetln(xP.cgen.cur_line.replace(f.name + ' (', '/*opt*/printf ("' + fmt + '\\n", '))
 					continue
 				}
+			}
 			}
 			if typ.ends_with('*') {
 				xP.cgen.set_shadow(sh, 'ptr_str(')
@@ -860,6 +849,7 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 				continue
 			}
 			// Make sure this type has a `str()` method
+			$if !js {
 			if !T.has_method('str') {
 				// Arrays have automatic `str()` methods
 				if T.name.starts_with('array_') {
@@ -886,6 +876,7 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 			}
 			xP.cgen.set_shadow(sh, '${typ}_str(')
 			xP.gen(')')
+			}
 			continue
 		}
 		got := typ
@@ -1022,4 +1013,20 @@ fn (f &Fn) str_args(table &dataTable) string {
 		}
 	}
 	return s
+}
+
+// Find local function variable with closest name to `name`
+fn (f &Fn) find_misspelled_local_var(name string, min_match f32) string {
+	mut closest := f32(0)
+	mut closest_var := ''
+	for var in f.local_vars {
+		n := name.all_after('.')
+		if var.name == '' || (n.len - var.name.len > 2 || var.name.len - n.len > 2) { continue }
+		r := StringX.dice_coefficient(var.name, n)
+		if r > closest {
+			closest = r
+			closest_var = var.name
+		}
+	}
+	return if closest >= min_match { closest_var } else { '' }
 }

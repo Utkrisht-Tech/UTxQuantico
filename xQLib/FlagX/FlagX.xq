@@ -48,7 +48,7 @@
 
 module FlagX
 
-// data object storing informations about a defined flag
+// data object storing information about a defined flag
 struct FlagX {
 public:
     name              string // name as it appears on command line
@@ -105,7 +105,7 @@ fn (fs mut FlagXParser) add_flag(n string, a byte, u, vd string) {
 }
 
 // Internal: General parsing for a single argument 
-//  - search args for existance
+//  - search args for existence
 //    if true
 //      extract the defined value as string
 //    else 
@@ -309,7 +309,7 @@ public fn (fs FlagXParser) usage() string {
 // Finalize argument parsing -> call after all arguments are defined
 //
 // all remaining arguments are returned in the same order they are defined on
-// commandline
+// command line
 //
 // if additional flag are found (things starting with '--') an error is returned 
 // error handling is up to the application developer

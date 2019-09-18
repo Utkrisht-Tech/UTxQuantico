@@ -121,7 +121,7 @@ fn (g mut CGen) end_tmp() string {
 	return res
 }
 
-fn (g mut CGen) add_shadow() int {
+fn (g &CGen) add_shadow() int {
 	if g.is_tmp {
 		return g.tmp_line.len
 	}
@@ -177,19 +177,19 @@ fn (g mut CGen) register_thread_fn(wrapper_name, wrapper_text, struct_text strin
 	g.thread_args << wrapper_text
 }
 
-fn (c mut UTxQ) prof_counters() string {
+fn (xQ &UTxQ) prof_counters() string {
 	mut res := []string
 	// Global fns
-	//for f in c.table.fns {
-		//res << 'double ${c.table.cgen_name(f)}_time;'
+	//for f in xQ.table.fns {
+		//res << 'double ${xQ.table.cgen_name(f)}_time;'
 	//}
 	// Methods
 	/*
-	for typ in c.table.types {
+	for typ in xQ.table.types {
 		// println('')
 		for f in typ.methods {
 			// res << f.cgen_name()
-			res << 'double ${c.table.cgen_name(f)}_time;'
+			res << 'double ${xQ.table.cgen_name(f)}_time;'
 			// println(f.cgen_name())
 		}
 	}
@@ -197,7 +197,7 @@ fn (c mut UTxQ) prof_counters() string {
 	return res.join(';\n')
 }
 
-fn (xP mut Parser) print_prof_counters() string {
+fn (xP &Parser) print_prof_counters() string {
 	mut res := []string
 	// Global fns
 	//for f in xP.table.fns {
@@ -275,6 +275,8 @@ fn os_name_to_ifdef(name string) string {
 		case 'netbsd': return '__NetBSD__'
 		case 'dragonfly': return '__DragonFly__'
 		case 'msvc': return '_MSC_VER'
+		case 'android': return '__BIONIC__'
+		case 'js': return '_XQJS'
 	}
 	cerror('bad os ifdef name "$name"')
 	return ''
@@ -295,7 +297,7 @@ fn platform_postfix_to_ifdefguard(name string) string {
 // C struct definitions, ordered
 // Sort the types, make sure types that are referenced by other types
 // are added before them.
-fn (xQ mut UTxQ) c_type_definitions() string {
+fn (xQ &UTxQ) type_definitions() string {
 	mut types := []Type // structs that need to be sorted
 	mut builtin_types := []Type // builtin types
 	// builtin types need to be on top
@@ -316,31 +318,6 @@ fn (xQ mut UTxQ) c_type_definitions() string {
 	// Generate C code
 	return types_to_c(builtin_types,xQ.table) + '\n//----\n' +
 			types_to_c(types_sorted, xQ.table)
-}
-
-fn types_to_c(types []Type, table &dataTable) string {
-	mut sb := StringX.new_builder(10)
-	for t in types {
-		if t.cat != .union && t.cat != .struct {
-			continue
-		}
-		//if is_objc {
-			//sb.writeln('@interface $name : $objc_parent { @public')
-		//}
-		//if is_atomic {
-			//sb.write('_Atomic ')
-		//}
-		kind := if t.cat == .union {'union'} else {'struct'}
-		sb.writeln('$kind $t.name {')
-		for field in t.fields {
-			sb.writeln(table.cgen_name_type_pair(field.name, field.typ) + ';')
-		}
-		sb.writeln('};\n')
-		//if is_objc {
-			//sb.writeln('@end')
-		//}
-	}
-	return sb.str()
 }
 
 // sort structs by dependant fields

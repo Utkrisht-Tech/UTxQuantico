@@ -40,7 +40,7 @@ mut:
 	expected_type  string
 	tmp_count      int
 	is_script      bool
-	pref           &Preferences // Setting and Preferences shared from UTxQ struct
+	pref           &Preferences // Preferences shared from UTxQ struct
 	builtin_mod    bool
 	xQh_lines      []string
 	inside_if_expr bool
@@ -51,7 +51,7 @@ mut:
 	for_expr_count int // to detect whether `continue` can be used
 	ptr_cast       bool
 	calling_c      bool
-	cur_fn         &Fn
+	cur_fn         Fn
 	returns        bool
 	xQRoot         string
 	is_c_struct_init bool
@@ -65,14 +65,15 @@ mut:
 	cur_gen_type	 string // "App" to replace "T" in current generic function
 	is_WebX        bool
 	is_SqlX        bool
+	is_js			bool
 	SqlX_i         int  // $1 $2 $3
 	SqlX_params    []string // ("select * from users where id = $1", ***"100"***)
 	SqlX_types 		 []string // int, string and so on; see SqlX_params
 }
 
 const (
-	EmptyFn = &Fn { }
-	MainFn= &Fn{name:'main'}
+	EmptyFn = Fn { }
+	MainFn= Fn{name:'main'}
 )
 
 const (
@@ -108,6 +109,10 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 		xQRoot: xQ.xQRoot
 	}
 
+	$if js {
+		xP.is_js = true
+	}
+
 	if xP.pref.is_repl {
 		xP.scanner.should_print_line_on_error = false
 	}
@@ -120,8 +125,9 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 	return xP
 }
 
-fn (xP mut Parser) set_current_fn(f &Fn) {
+fn (xP mut Parser) set_current_fn(f Fn) {
 	xP.cur_fn = f
+	//xP.cur_fn = xP.table.fns[f.name]
 	xP.scanner.fn_name = '${f.mod}.${f.name}'
 }
 
@@ -763,7 +769,7 @@ if xP.scanner.line_comment != '' {
 }
 }
 
-fn (xP mut Parser) warn(s string) {
+fn (xP &Parser) warn(s string) {
 				println('warning: $xP.scanner.file_path:${xP.scanner.line_no_y+1}: $s')
 }
 
@@ -880,9 +886,10 @@ fn (xP mut Parser) get_type() string {
 		return typ
 	}
 	//
+	mut warn := false
 	for xP.tk == .STAR {
 		if xP.first_cp() {
-			xP.warn('use `&Foo` instead of `*Foo`')
+			warn = true
 		}
 		star = true
 		nr_stars++
@@ -906,6 +913,9 @@ fn (xP mut Parser) get_type() string {
 		typ = xP.lit
 	}
 	else {
+		if warn {
+			xP.warn('use `&Foo` instead of `*Foo`')
+		}
 		// Module specified? (e.g. gx.Image)
 		if xP.peek() == .DOT {
 			// try resolve full submodule
@@ -1008,7 +1018,7 @@ fn (xP mut Parser) statements() string {
 }
 
 fn (xP mut Parser) statements_no_rcbr() string {
-	xP.cur_fn.open_scope()
+	xP.open_scope()
 
 	if !xP.inside_if_expr {
 		xP.genln('')
@@ -1052,38 +1062,44 @@ fn (xP mut Parser) close_scope() {
 	mut i := xP.cur_fn.var_idx - 1
 	for ; i >= 0; i-- {
 		xQ := xP.cur_fn.local_vars[i]
+		//if xP.cur_fn.name == 'main' {
+			//println('var in main $xQ.name $xQ.typ $xQ.is_alloc ptr=$xQ.ptr')
+		//}
 		if xQ.scope_level != xP.cur_fn.scope_level {
 			// println('breaking. "$xQ.name" xQ.scope_level=$xQ.scope_level')
 			break
 		}
-		// Clean up memory, do this now for only UTxQCompiler
-		if xP.pref.building_xQ && xQ.is_alloc && !xP.pref.is_test {
+		// Clean up memory, only do this if -autofree was passed for now
+		if xP.pref.autofree && xP.is_alloc && !xP.pref.is_test {
+			mut free_fn := 'free'
 			if xQ.typ.starts_with('array_') {
-				//if false && xP.returns {
-				if xP.returns {
-					if !xQ.is_returned {
-						prev_line := xQ.cgen.lines[xP.cgen.lines.len-2]
-						xP.cgen.lines[xP.cgen.lines.len-2] = 'xQ_array_free($xQ.name); /* :) close_scope free */' + prev_line
-					}
-				} else {
-					xP.genln('xQ_array_free($xQ.name); // close_scope free')
+				free_fn = 'xQ_array_free'
+			} else if xQ.typ == 'string' {
+				free_fn = 'xQ_string_free'
+				continue
+			} else if xQ.ptr || xQ.typ.ends_with('*') {
+				free_fn = 'xQ_ptr_free'
+				//continue
+			} else {
+				continue
+			}
+			//if false && xP.returns {
+			if xP.returns {
+				if !xQ.is_returned && xQ.typ != 'FILE*' { //!xQ.is_c {
+					prev_line := xQ.cgen.lines[xQ.cgen.lines.len-2]
+					xQ.cgen.lines[xQ.cgen.lines.len-2] = '$free_fn($xQ.name); /* :) close_scope free $xQ.typ */' + prev_line
 				}
-			}
-			else if xQ.typ == 'string' {
-				//xP.genln('xQ_string_free($xQ.name); // close_scope free')
-			}
-			else if xQ.ptr {
-				//xQ.genln('free($xQ.name); // close_scope free')
+			} else {
+				xP.genln('$free_fn($xQ.name); // close_scope free')
 			}
 		}
 	}
-
 	if xP.cur_fn.defer_text.last() != '' {
 		xP.genln(xP.cur_fn.defer_text.last())
 		//xP.cur_fn.defer_text[f] = ''
 	}
-
-	xP.cur_fn.close_scope()
+	xP.cur_fn.scope_level--
+	xP.cur_fn.defer_text = xP.cur_fn.defer_text.left(xP.cur_fn.scope_level + 1)
 	xP.cur_fn.var_idx = i + 1
 	// println('close_scope new var_idx=$f.var_idx\n')
 }
@@ -1219,7 +1235,7 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 		xP.error('`$val.name` is immutable.')
 	}
 	if !val.is_changed {
-		xP.cur_fn.mark_var_changed(val)
+		xP.mark_var_changed(val)
 	}
 	is_str := val.typ == 'string'
 	switch tk {
@@ -1228,7 +1244,7 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 			xP.gen(' = ')
 		}
 	case Token.PLUS_ASSIGN:
-		if is_str {
+		if is_str && !xP.is_js  {
 			xP.gen('= string_add($val.name, ')// TODO can't do `foo.bar += '!'`
 		}
 		else {
@@ -1258,13 +1274,13 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 		xP.scanner.line_no_y--
 		xP.error('cannot use type `$expr_type` as type `$xP.assigned_type` in assignment')
 	}
-	if is_str && tk == .PLUS_ASSIGN {
+	if is_str && tk == .PLUS_ASSIGN && !xP.is_js {
 		xP.gen(')')
 	}
 	// xP.assigned_var = ''
 	xP.assigned_type = ''
 	if !val.is_used {
-		xP.cur_fn.mark_var_used(val)
+		xP.mark_var_used(val)
 	}
 }
 
@@ -1293,56 +1309,14 @@ fn (xP mut Parser) var_decl() {
 		xP.error('variable names cannot contain uppercase letters, use snake_case instead')
 	}
 	xP.check_space(.DECL_ASSIGN) // :=
-	// Generate expression to tmp because we need its type first
-	// [TYP .NAME =] bool_expression()
-	pos := xP.cgen.add_shadow()
-	mut typ := xP.bool_expression()
-	// Option check ? or {
-	else_if := xP.tk == .key_else_if
-	tmp := xP.get_tmp()
-	if else_if {
-		// Option_User tmp = get_user(1);
-		// if (!tmp.ok) { or_statement }
-		// User user = *(User*)tmp.data;
-		// xP.assigned_var = ''
-		xP.cgen.set_shadow(pos, '$typ $tmp = ')
-		xP.genln(';')
-		typ = typ.replace('Option_', '')
-		xP.next()
-		xP.check(.LCBR)
-		xP.genln('if (!$tmp .ok) {')
-		xP.register_var(Var {
-			name: 'err'
-			typ: 'string'
-			is_mutable: false
-			is_used: true
-		})
-		xP.genln('string err = $tmp . error;')
-		xP.statements()
-		xP.genln('$typ $name = *($typ*) $tmp . data;')
-		if !xP.returns && xP.prev_tk2 != .key_continue && xP.prev_tk2 != .key_break {
-			xP.error('`or` block must return/continue/break/panic')
-		}
-		xP.returns = false
-	}
+	typ := xP.gen_var_decl(name, is_static)
 	xP.register_var(Var {
 		name: name
 		typ: typ
 		is_mutable: is_mutable
 		is_alloc: xP.is_alloc
 	})
-	if !else_if {
-		gen_name := xP.table.var_cgen_name(name)
-		mut nt_gen := xP.table.cgen_name_type_pair(gen_name, typ)
-		// `foo := C.Foo{}` => `Foo foo;`
-		if !xP.is_empty_c_struct_init {
-			nt_gen += '='
-		}
-		if is_static {
-			nt_gen = 'static $nt_gen'
-		}
-		xP.cgen.set_shadow(pos, nt_gen)
-	}
+	//if xP.is_alloc { println('REG VAR IS ALLOC $name') }
 	xP.var_decl_name = ''
 	xP.is_empty_c_struct_init = false
 }
@@ -1396,7 +1370,7 @@ fn (xP mut Parser) bterm() string {
 	// if tk in [ .EQEQUAL, .GREATER, .LESSER, .LESSEQUAL, .GREATEREQUAL, .NOTEQUAL] {
 	if tk == .EQEQUAL || tk == .NOTEQUAL || tk == .GREATEREQUAL || tk == .LESSEQUAL || tk == .GREATER || tk == .LESSER {
 		xP.fgen(' ${xP.tk.str()} ')
-		if is_str {
+		if is_str && !xP.is_js {
 			xP.gen(',')
 		}
 		else if xP.is_SqlX && tk == .EQEQUAL {
@@ -1420,7 +1394,7 @@ fn (xP mut Parser) bterm() string {
 			xP.check_types(xP.expression(), typ)
 		}
 		typ = 'bool'
-		if is_str { //&& !xP.is_SqlX {
+		if is_str && !xP.is_js { //&& !xP.is_SqlX {
 			xP.gen(')')
 			switch tk {
 			case Token.EQEQUAL: xP.cgen.set_shadow(sh, 'string_eqeq(')
@@ -1535,7 +1509,7 @@ fn (xP mut Parser) name_expr() string {
 		}
 		if xP.inside_return_expr {
 			//println('marking $v.name returned')
-			xP.cur_fn.mark_var_returned(v)
+			xP.mark_var_returned(v)
 			// v.is_returned = true // TODO modifying a local variable
 			// that's not used afterwards, this should be a compilation
 			// error
@@ -1554,7 +1528,8 @@ fn (xP mut Parser) name_expr() string {
 				name += '*'
 			}
 			xP.gen('(')
-			mut typ := xP.cast(name)
+			mut typ := name
+			xP.cast(name)
 			xP.gen(')')
 			for xP.tk == .DOT {
 				typ = xP.dot(typ, sh)
@@ -1583,7 +1558,8 @@ fn (xP mut Parser) name_expr() string {
 			if name == 'T' {
 				name = xP.cur_gen_type
 			}
-			return xP.struct_init(name, is_c_struct_init)
+			xP.is_c_struct_init = is_c_struct_init
+			return xP.struct_init(name)
 		}
 	}
 	if is_c {
@@ -1639,6 +1615,11 @@ fn (xP mut Parser) name_expr() string {
 				f = xP.table.find_fn(name)
 			}
 			if f.name == '' {
+				// Check for misspelled function / variable / module names
+				suggested := xP.table.identify_typo(name, xP.cur_fn, xP.import_table)
+				if suggested != '' {
+					xP.error('Undefined: `$name`. Did you mean: $suggested')
+				}
 				// If orig_name is a mod, then printing undefined: `mod` tells us nothing
 				// if xP.table.known_mod(orig_name) {
 				if xP.table.known_mod(orig_name) || xP.import_table.known_alias(orig_name) {
@@ -1672,7 +1653,7 @@ fn (xP mut Parser) name_expr() string {
 			function: f
 		}
 		xP.table.register_type2(fn_typ)
-		xP.gen(xP.table.cgen_name(f))
+		xP.gen(xP.table.fn_gen_name(f))
 		xP.next()
 		return f.typ_str() //'void*'
 	}
@@ -1692,13 +1673,16 @@ fn (xP mut Parser) name_expr() string {
 		return typ
 	}
 	xP.log('end of name_expr')
+	if f.typ.ends_with('*') {
+		xP.is_alloc = true
+	}
 	return f.typ
 }
 
 fn (xP mut Parser) var_expr(var Var) string {
 	xP.log('\nvar_expr() var.name="$var.name" var.typ="$var.typ"')
 	// println('var expr is_tmp=$xP.cgen.is_tmp\n')
-	xP.cur_fn.mark_var_used(var)
+	xP.mark_var_used(var)
 	fn_sh := xP.cgen.add_shadow()
 	xP.expr_var = var
 	xP.gen(xP.table.var_cgen_name(var.name))
@@ -1747,7 +1731,7 @@ fn (xP mut Parser) var_expr(var Var) string {
 			xP.error('`$var.name` is immutable')
 		}
 		if !var.is_changed {
-			xP.cur_fn.mark_var_changed(var)
+			xP.mark_var_changed(var)
 		}
 		if typ != 'int' {
 			if !xP.pref.translated && !is_number_type(typ) {
@@ -1828,7 +1812,7 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 	}
 	mut dot := '.'
 	if str_typ.ends_with('*') || str_typ == 'FT_Face' { // TODO fix C ptr typedefs
-		dot = '->'
+		dot = dot_ptr
 	}
 	// field
 	if has_field {
@@ -1878,7 +1862,31 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 		// if is_indexer {
 		//return xP.index_expr(method.typ, method_sh)
 	//}
+	if method.typ.ends_with('*') {
+		xP.is_alloc = true
+	}
 	return method.typ
+}
+
+enum IndexType {
+	none
+	str
+	map
+	array
+	array0
+	fixed_array
+	ptr
+}
+
+fn get_index_type(typ string) IndexType {
+	if typ.starts_with('map_') { return IndexType.map }
+	if typ == 'string' { return IndexType.str }
+	if typ.starts_with('array_')	|| typ == 'array' { return IndexType.array }
+	if typ == 'byte*' || typ == 'byteptr' || typ.contains('*') {
+		return IndexType.ptr
+	}
+	if typ[0] == `[` { return IndexType.fixed_array }
+	return IndexType.none
 }
 
 fn (xP mut Parser) index_expr(typ_ string, fn_sh int) string {
@@ -1938,34 +1946,10 @@ fn (xP mut Parser) index_expr(typ_ string, fn_sh int) string {
 			}
 		}
 		if is_arr {
-			//xP.fgen('[')
-			// array_int a; a[0]
-			// type is "array_int", need "int"
-			// typ = typ.replace('array_', '')
 			if is_arr0 {
-				if xP.fileis('int_test') {
-					println('\nRRRR0 $typ')
-				}
 				typ = typ.right(6)
-				if xP.fileis('int_test') {
-					println('RRRR $typ')
-				}
 			}
-			// array a; a.first() voidptr
-			// type is "array", need "void*"
-			if typ == 'array' {
-				typ = 'void*'
-			}
-			// No bounds check in translated from C code
-			if xP.pref.translated && !xP.builtin_mod{
-				// Cast void* to typ*: add (typ*) to the beginning of the assignment :
-				// ((int*)a.data = ...
-				xP.cgen.set_shadow(fn_sh, '(($typ*)(')
-				xP.gen('.data))[')
-			}
-			else {
-				xP.gen(',')
-			}
+			xP.gen_array_at(typ, is_arr0, fn_sh)
 		}
 		// map is tricky
 		// need to replace "m[key] = val" with "tmp = val; map_set(&m, key, &tmp)"
@@ -2013,43 +1997,14 @@ fn (xP mut Parser) index_expr(typ_ string, fn_sh int) string {
 		if is_indexer && is_str && !xP.builtin_mod {
 			xP.error('strings are immutable')
 		}
-		assign_pos := xP.cgen.cur_line.len
-		is_cao := xP.tk != .ASSIGN
 		xP.assigned_type = typ
 		xP.expected_type = typ
+		assign_pos := xP.cgen.cur_line.len
+		is_cao := xP.tk != .ASSIGN
 		xP.assign_statement(var, fn_sh, is_indexer && (is_map || is_arr))
-		// m[key] = val
+		// `m[key] = val`
 		if is_indexer && (is_map || is_arr) {
-			// `a[0] = 7`
-			// curline right now: `a , 0  =  7`
-			mut val := xP.cgen.cur_line.right(assign_pos)
-			xP.cgen.resetln(xP.cgen.cur_line.left(assign_pos))
-			mut cao_tmp := xP.cgen.cur_line
-			mut function := ''
-			if is_map {
-				function = 'map__set(&'
-				// CAO on map is a bit more complicated as it loads
-				// the value inside a pointer instead of returning it.
-			}
-			else {
-				if is_ptr {
-					function = 'array_set('
-					if is_cao {
-						cao_tmp = '*($xP.expected_type *) array__get(*$cao_tmp)'
-					}
-				}
-				else {
-					function = 'array_set(&/*q*/'
-					if is_cao {
-						cao_tmp = '*($xP.expected_type *) array__get($cao_tmp)'
-					}
-				}
-			}
-			xP.cgen.set_shadow(fn_sh, function)
-			if is_cao {
-				val = cao_tmp + val.all_before('=') +	val.all_after('=')
-			}
-			xP.gen(', & ($typ []) { $val })')
+			xP.gen_array_set(typ, is_ptr, is_map, fn_sh, assign_pos, is_cao)
 		}
 		return typ
 	}
@@ -2058,50 +2013,24 @@ fn (xP mut Parser) index_expr(typ_ string, fn_sh int) string {
 	// }
 	// m[key]. no =, just a getter
 	else if (is_map || is_arr || (is_str && !xP.builtin_mod)) && is_indexer {
-		// Erase var name we generated earlier:	"int a = m, 0"
-		// "m, 0" gets killed since we need to start from scratch. It's messy.
-		// "m, 0" is an index expression, save it before deleting and insert later in map_get()
-		mut index_expr := ''
-		if xP.cgen.is_tmp {
-			index_expr = xP.cgen.tmp_line.right(fn_sh)
-			xP.cgen.resetln(xP.cgen.tmp_line.left(fn_sh))
-		} else {
-			index_expr = xP.cgen.cur_line.right(fn_sh)
-			xP.cgen.resetln(xP.cgen.cur_line.left(fn_sh))
-		}
-		// Can't pass integer literal, because map_get() requires a void*
-		tmp := xP.get_tmp()
-		tmp_ok := xP.get_tmp()
-		if is_map {
-			xP.gen('$tmp')
-			def := type_default(typ)
-			xP.cgen.insert_before('$typ $tmp = $def; bool $tmp_ok = map_get($index_expr, & $tmp);')
-		}
-		else if is_arr {
-			if xP.pref.translated && !xP.builtin_mod {
-				xP.gen('$index_expr ]')
-			}
-			else {
-				if is_ptr {
-					xP.gen('( *($typ*) array__get(* $index_expr) )')
-				}  else {
-					xP.gen('( *($typ*) array__get($index_expr) )')
-				}
-			}
-		}
-		else if is_str && !xP.builtin_mod {
-			xP.gen('string_at($index_expr)')
-		}
-		// Zero the string after map_get() if it's nil, numbers are automatically 0
-		// This is ugly, but what can I do without generics?
-		// TODO what about user types?
-		if is_map && typ == 'string' {
-			// xP.cgen.insert_before('if (!${tmp}.str) $tmp = tos("", 0);')
-			xP.cgen.insert_before('if (!$tmp_ok) $tmp = tos((byte *)"", 0);')
-		}
+		xP.index_get(typ, fn_sh, IndexCfg{
+			is_arr: is_arr
+			is_map: is_map
+			is_ptr: is_ptr
+			is_str: is_str
+		})
 	}
 	// else if is_arr && is_indexer{}
 	return typ
+}
+
+struct IndexCfg {
+	is_map bool
+	is_str bool
+	is_ptr bool
+	is_arr bool
+	is_arr0 bool
+
 }
 
 // returns resulting type
@@ -2110,11 +2039,10 @@ fn (xP mut Parser) expression() string {
 		println('expression() cp=$xP.cp tk=')
 		xP.print_tk()
 	}
-	xP.cgen('/* expr start*/')
 	sh := xP.cgen.add_shadow()
 	mut typ := xP.term()
 	is_str := typ=='string'
-	// a << b ==> array2_push(&a, b)
+	// `a << b` ==> `array_push(&a, b)`
 	if xP.tk == .LEFT_SHIFT {
 		if typ.contains('array_') {
 			// Can't pass integer literal, because push requires a void*
@@ -2130,23 +2058,11 @@ fn (xP mut Parser) expression() string {
 				xP.error('`$xP.expr_var.name` is immutable (can\'t <<)')
 			}
 			if !xP.expr_var.is_changed {
-				xP.cur_fn.mark_var_changed(xP.expr_var)
+				xP.mark_var_changed(xP.expr_var)
 			}
 			expr_type := xP.expression()
 			// Two arrays of the same type?
-			push_array :=  typ == expr_type
-			if push_array {
-				xP.cgen.set_shadow(sh, '_PUSH_MANY(&' )
-				xP.gen('), $tmp, $typ)')
-			}  else {
-				xP.check_types(expr_type, tmp_typ)
-				// Pass tmp var info to the _PUSH macro
-				// Prepend tmp initialisation and push call
-				// Don't dereference if it's already a mutable array argument  (`fn foo(mut []int)`)
-				push_call := if typ.contains('*'){'_PUSH('} else { '_PUSH(&'}
-				xP.cgen.set_shadow(sh, push_call)
-				xP.gen('), $tmp, $tmp_typ)')
-			}
+			xP.gen_array_push(sh, typ, expr_type, tmp, tmp_typ)
 			return 'void'
 		}
 		else {
@@ -2193,18 +2109,21 @@ fn (xP mut Parser) expression() string {
 			typ = xP.dot(typ, sh)
 		}
 	}
-	// + - |
+	// + - | ^
 	for xP.tk == .PLUS || xP.tk == .MINUS || xP.tk == .PIPE || xP.tk == .AMPER || xP.tk == .XOR {
 		// for xP.tk in [.PLUS, .MINUS, .PIPE, .AMPER, .XOR] {
 		tk_op := xP.tk
+		if typ == 'bool' {
+			xP.error('operator ${xP.tk.str()} not defined on bool ')
+		}
 		is_num := typ == 'void*' || typ == 'byte*' || is_number_type(typ)
 		xP.check_space(xP.tk)
-		if is_str && tk_op == .PLUS {
+		if is_str && tk_op == .PLUS && !xP.is_js {
 			xP.cgen.set_shadow(sh, 'string_add(')
 			xP.gen(',')
 		}
 		// 3 + 4
-		else if is_num {
+		else if is_num || xP.is_js {
 			if typ == 'void*' {
 				// Msvc errors on void* pointer arithmetic
 				// ... So cast to byte* and then do the add
@@ -2222,7 +2141,7 @@ fn (xP mut Parser) expression() string {
 			}
 		}
 		xP.check_types(xP.term(), typ)
-		if is_str && tk_op == .PLUS {
+		if is_str && tk_op == .PLUS && !xP.is_js {
 			xP.gen(')')
 		}
 		// Make sure operators are used with correct types
@@ -2488,17 +2407,27 @@ fn (xP mut Parser) string_expr() {
 		xP.fgen('\'$str\'')
 		f := format_str(str)
 		// `C.puts('hi')` => `puts("hi");`
-		if xP.calling_c || (xP.pref.translated && xP.mod == 'main') {
+		/*
+		Calling a C function sometimes requires a call to a string method
+		C.fun('ssss'.to_wide()) =>  fun(string_to_wide(tos2((byte*)('ssss'))))
+		*/
+		if (xP.calling_c && xP.peek() != .DOT) || (xP.pref.translated && xP.mod == 'main') {
 			xP.gen('"$f"')
 		}
 		else if xP.is_SqlX {
 			xP.gen('\'$str\'')
+		}
+		else if xP.is_js {
+			xP.gen('"$f"')
 		}
 		else {
 			xP.gen('tos2((byte*)"$f")')
 		}
 		xP.next()
 		return
+	}
+	$if js {
+		xP.error('JS backend does not support string formatting yet')
 	}
 	// tmp := xP.get_tmp()
 	xP.is_alloc = true // $ interpolation means there's allocation
@@ -2698,10 +2627,10 @@ fn (xP mut Parser) array_init() string {
 	mut typ := ''
 	new_arr_sh := xP.cgen.add_shadow()
 	mut i := 0
-	pos := xP.cgen.cur_line.len// remember cur line to fetch first number in cgen  for [0; 10]
+	pos := xP.cgen.cur_line.len// remember cur line to fetch first number in cgen 	for [0; 10]
 	for xP.tk != .RSBR {
 		val_typ := xP.bool_expression()
-		// Get type of the first expression
+		// Get the type of first expression
 		if i == 0 {
 			typ = val_typ
 			// fixed width array initialization? (`arr := [20]byte`)
@@ -2712,17 +2641,16 @@ fn (xP mut Parser) array_init() string {
 				if !nextch.is_space() {
 					xP.check(.RSBR)
 					array_elem_typ := xP.get_type()
-					if xP.table.known_type(array_elem_typ) {
-						xP.cgen.resetln('')
-						xP.gen('{0}')
-						if is_const_len {
-							return '[${xP.mod}__$lit]$array_elem_typ'
-						}
-						return '[$lit]$array_elem_typ'
-					}
-					else {
+					if !xP.table.known_type(array_elem_typ) {
 						xP.error('bad type `$array_elem_typ`')
 					}
+					xP.cgen.resetln('')
+					//xP.gen('{0}')
+					xP.is_alloc = false
+					if is_const_len {
+						return '[${xP.mod}__$lit]$array_elem_typ'
+					}
+					return '[$lit]$array_elem_typ'
 				}
 			}
 		}
@@ -2739,10 +2667,11 @@ fn (xP mut Parser) array_init() string {
 		i++
 		// Repeat (a = [0;5] )
 		if i == 1 && xP.tk == .SEMICOLON {
+			xP.warn('`[0 ; len]` syntax was removed. Use `[0].repeat(len)` instead')
 			xP.check_space(.SEMICOLON)
 			val := xP.cgen.cur_line.right(pos)
 			xP.cgen.resetln(xP.cgen.cur_line.left(pos))
-			xP.gen('array_repeat(& ($typ[]){ $val }, ')
+			xP.gen('array_repeat_old(& ($typ[]){ $val }, ')
 			xP.check_types(xP.bool_expression(), 'int')
 			xP.gen(', sizeof($typ) )')
 			xP.check(.RSBR)
@@ -2757,7 +2686,6 @@ fn (xP mut Parser) array_init() string {
 	if xP.tk == .NAME && i == 0 {
 		// vals.len == 0 {
 		typ = xP.get_type()
-		// println('.key_goT TYP after [] $typ')
 	}
 	// ! after array => no malloc and no copy
 	no_alloc := xP.tk == .NOT
@@ -2785,55 +2713,20 @@ fn (xP mut Parser) array_init() string {
 	// if ptr {
 	// typ += '_ptr"
 	// }
-	mut new_arr := 'new_array_from_c_array'
-	if no_alloc {
-		new_arr += '_no_alloc'
-	}
-
-	if i == 0 && xP.pref.ccompiler != 'tcc' {
-		xP.gen(' 0 })')
-	} else {
-		xP.gen(' })')
-	}
-
-	// xP.gen('$new_arr($vals.len, $vals.len, sizeof($typ), ($typ[$vals.len]) $c_arr );')
-	// Need to do this in the second CheckPoint, otherwise it goes to the very top of the out.c file
-	if !xP.first_cp() {
-		//if i == 0 {
-			//xP.cgen.set_shadow(new_arr_sh, '$new_arr($i, $i, sizeof($typ), ($typ[]) { 0 ')
-		//} else {
-		// Due to a tcc bug, the length needs to be specified.
-		// GCC crashes if it is.
-		cast := if xP.pref.ccompiler == 'tcc' { '($typ[$i])' } else { '($typ[])' }
-		xP.cgen.set_shadow(new_arr_sh, '$new_arr($i, $i, sizeof($typ), $cast { ')
-		//}
-	}
+	xP.gen_array_init(typ, no_alloc, new_arr_sh, i)
 	typ = 'array_$typ'
 	xP.register_array(typ)
 	return typ
 }
 
-fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
+fn (xP mut Parser) struct_init(typ string) string {
+	//xP.gen('/* struct init */')
 	xP.is_struct_init = true
 	t := xP.table.find_type(typ)
-	// TODO hack. If it's a C type, we may need to add "struct" before declaration:
-	// a := &C.A{}  ==>  struct A* a = malloc(sizeof(struct A));
-	if is_c_struct_init {
-		xP.is_c_struct_init = true
-		if t.cat != .c_typedef {
-			xP.cgen.insert_before('struct /*c struct init*/')
-		}
-	}
-	xP.next()
+	if xP.gen_struct_init(typ, t) { return typ }
 	xP.scanner.format_out.cut(typ.len)
 	ptr := typ.contains('*')
-	// TODO tm struct struct bug
-	if typ == 'tm' {
-		xP.cgen.lines[xP.cgen.lines.len-1] = ''
-	}
-	xP.check(.LCBR)
-	no_star := typ.replace('*', '')
-	// `user := User{foo:bar}` => `User user = (User){ .foo = bar}`
+	/*
 	if !ptr {
 		if xP.is_c_struct_init {
 			// `face := C.FT_Face{}` => `FT_Face face;`
@@ -2846,7 +2739,7 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 			xP.is_c_struct_init = false
 		}
 		else {
-			xP.gen('($typ) {')
+			xP.gen('($typ /*str init */) {')
 		}
 	}
 	else {
@@ -2858,8 +2751,11 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 			xP.check(.RCBR)
 			return typ
 		}
-		xP.gen('($no_star*)memdup(&($no_star)  {') //sizeof(Node));
+		xP.is_alloc = true
+		//println('setting is_alloc=true (ret $typ)')
+		xP.gen('($t.name*)memdup(&($t.name)  {')
 	}
+	*/
 	mut did_gen_something := false
 	// Loop thru all struct init keys and assign values
 	// u := User{age:20, name:'bob'}
@@ -2877,7 +2773,7 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 			}
 			f := t.find_field(field)
 			inited_fields << field
-			xP.gen('.$field = ')
+			xP.gen_struct_field_init(field)
 			xP.check(.COLON)
 			xP.fspace()
 			xP.check_types(xP.bool_expression(),  f.typ)
@@ -2907,7 +2803,8 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 			}
 			// init map fields
 			if field_typ.starts_with('map_') {
-				xP.gen('.$field.name = new_map(1, sizeof( ${field_typ.right(4)} ))')
+				xP.gen_struct_field_init(field.name)
+				xP.gen_empty_map(field_typ.right(4))
 				inited_fields << field.name
 				if i != t.fields.len - 1 {
 					xP.gen(',')
@@ -2917,12 +2814,13 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 			}
 			def_val := type_default(field_typ)
 			if def_val != '' && def_val != '{0}' {
-				xP.gen('.$field.name = $def_val')
+				xP.gen_struct_field_init(field.name)
+				xP.gen(def_val)
 				if i != t.fields.len - 1 {
 					xP.gen(',')
 				}
+				did_gen_something = true
 			}
-			did_gen_something = true
 		}
 	}
 	// Point{3,4} syntax
@@ -2956,77 +2854,20 @@ fn (xP mut Parser) struct_init(typ string, is_c_struct_init bool) string {
 		did_gen_something = true
 	}
 	if !did_gen_something {
-		xP.gen('0')
+		xP.gen('EMPTY_STRUCT_INITIALIZATION')
 	}
 	xP.gen('}')
-	if ptr {
-		xP.gen(', sizeof($no_star))')
+	if ptr && !xP.is_js {
+		xP.gen(', sizeof($t.name))')
 	}
 	xP.check(.RCBR)
 	xP.is_struct_init = false
+	xP.is_c_struct_init = false
 	return typ
 }
 
 // `f32(3)`
 // tk is `f32` or `)` if `(*int)(ptr)`
-fn (xP mut Parser) cast(typ string) string {
-	xP.next()
-	pos := xP.cgen.add_shadow()
-	if xP.tk == .RPAR {
-		// skip `)` if it's `(*int)(ptr)`, not `int(a)`
-		xP.ptr_cast = true
-		xP.next()
-	}
-	xP.check(.LPAR)
-	xP.expected_type = typ
-	expr_typ := xP.bool_expression()
-	// `face := FT_Face(cobj)` => `FT_Face face = *((FT_Face*)cobj);`
-	casting_voidptr_to_value :=  expr_typ == 'void*' && typ != 'int' &&
-		typ != 'byteptr' &&		!typ.ends_with('*')
-	xP.expected_type = ''
-	// `string(buffer)` => `tos2(buffer)`
-	// `string(buffer, len)` => `tos(buffer, len)`
-	// `string(bytes_array, len)` => `tos(bytes_array.data, len)`
-	is_byteptr := expr_typ == 'byte*' || expr_typ == 'byteptr'
-	is_bytearr := expr_typ == 'array_byte'
-	if typ == 'string' {
-		if is_byteptr || is_bytearr {
-			if xP.tk == .COMMA {
-				xP.check(.COMMA)
-				xP.cgen.set_shadow(pos, 'tos((byte *)')
-				if is_bytearr {
-					xP.gen('.data')
-				}
-				xP.gen(', ')
-				xP.check_types(xP.expression(), 'int')
-			}  else {
-				if is_bytearr {
-					xP.gen('.data')
-				}
-				xP.cgen.set_shadow(pos, 'tos2((byte *)')
-			}
-		}
-		// `string(234)` => error
-		else if expr_typ == 'int' {
-			xP.error('cannot cast `$expr_typ` to `$typ`, use `str()` method instead')
-		}
-		else {
-			xP.error('cannot cast `$expr_typ` to `$typ`')
-		}
-	}
-	else if typ == 'byte' && expr_typ == 'string' {
-		xP.error('cannot cast `$expr_typ` to `$typ`, use backquotes `` to create a `$typ` or access the value of an index of `$expr_typ` using []')
-	}
-	else if casting_voidptr_to_value {
-		xP.cgen.set_shadow(pos, '*($typ*)(')
-	}
-	else {
-		xP.cgen.set_shadow(pos, '($typ)(')
-	}
-	xP.check(.RPAR)
-	xP.gen(')')
-	return typ
-}
 
 fn (xP mut Parser) get_tmp() string {
 	xP.tmp_count++
@@ -3125,7 +2966,7 @@ fn (xP mut Parser) for_statement() {
 	xP.for_expr_count++
 	next_tk := xP.peek()
 	//debug := xP.scanner.file_path.contains('r_draw')
-	xP.cur_fn.open_scope()
+	xP.open_scope()
 	if xP.tk == .LCBR {
 		// Infinite loop
 		xP.gen('while (1) {')
@@ -3160,11 +3001,15 @@ fn (xP mut Parser) for_statement() {
 	}
 	// for i, val in array
 	else if xP.peek() == .COMMA {
-		// for i, val in array { ==>
-		//
-		// array_int tmp = array;
-		// for (int i = 0; i < tmp.len; i++) {
-		// int val = tmp[i];
+		/*
+		`for i, val in array {`
+		==>
+		```
+		 array_int tmp = array;
+		 for (int i = 0; i < tmp.len; i++) {
+		 int val = tmp[i];
+		```
+		*/
 		i := xP.check_name()
 		xP.check(.COMMA)
 		val := xP.check_name()
@@ -3181,7 +3026,11 @@ fn (xP mut Parser) for_statement() {
 			xP.error('cannot range over type `$typ`')
 		}
 		expr := xP.cgen.end_tmp()
-		xP.genln('$typ $tmp = $expr ;')
+		if xP.is_js {
+			xP.genln('var $tmp = $expr;')
+		} else {
+			xP.genln('$typ $tmp = $expr;')
+		}
 		pad := if is_arr { 6 } else  { 4 }
 		var_typ := if is_str { 'byte' } else { typ.right(pad) }
 		// typ = StringX.Replace(typ, "_ptr", "*", -1)
@@ -3200,9 +3049,9 @@ fn (xP mut Parser) for_statement() {
 				is_mutable: true
 				is_changed: true
 			}
+			//xP.genln(';\nfor ($i_type $i = 0; $i < $tmp .len; $i ++) {')
+			xP.gen_for_header(i, tmp, var_typ, val)
 			xP.register_var(i_var)
-			xP.genln(';\nfor (int $i = 0; $i < $tmp .len; $i ++) {')
-			xP.genln('$var_typ $val = (($var_typ *) $tmp . data)[$i];')
 		}
 		else if is_map {
 			i_var := Var {
@@ -3212,14 +3061,7 @@ fn (xP mut Parser) for_statement() {
 				is_changed: true
 			}
 			xP.register_var(i_var)
-			xP.genln('array_string keys_$tmp = map_keys(& $tmp ); ')
-			xP.genln('for (int l = 0; l < keys_$tmp .len; l++) {')
-			xP.genln('  string $i = ((string*)keys_$tmp .data)[l];')
-			//xP.genln('  string $i = *(string*) ( array__get(keys_$tmp, l) );')
-			def := type_default(typ)
-			// TODO don't call map_get() for each key, fetch values while traversing
-			// the tree (replace `map_keys()` above with `map_key_vals()`)
-			xP.genln('$var_typ $val = $def; map_get($tmp, $i, & $val);')
+			xP.gen_for_map_header(i, tmp, var_typ, val, typ)
 		}
 		else if is_str {
 			i_var := Var {
@@ -3229,9 +3071,7 @@ fn (xP mut Parser) for_statement() {
 				is_changed: true
 			}
 			xP.register_var(i_var)
-			xP.genln('array_byte bytes_$tmp = string_bytes( $tmp );')
-			xP.genln(';\nfor (int $i = 0; $i < $tmp .len; $i ++) {')
-			xP.genln('$var_typ $val = (($var_typ *) bytes_$tmp . data)[$i];')
+			xP.gen_for_str_header(i, tmp, var_typ, val)
 		}
 	}
 	// `for val in vals`
@@ -3258,7 +3098,11 @@ fn (xP mut Parser) for_statement() {
 		if !is_arr && !is_str && !is_range {
 			xP.error('cannot range over type `$typ`')
 		}
-		xP.genln('$typ $tmp = $expr;')
+		if xP.is_js {
+			xP.genln('var $tmp = $expr;')
+		} else {
+			xP.genln('$typ $tmp = $expr;')
+		}
 		// TODO var_type := if...
 		mut var_type := ''
 		if is_arr {
@@ -3280,23 +3124,16 @@ fn (xP mut Parser) for_statement() {
 		}
 		xP.register_var(val_var)
 		i := xP.get_tmp()
-		if is_range {
-			xP.genln(';\nfor (int $i = $tmp; $i < $range_end; $i++) {')
-		}
-		else {
-			xP.genln(';\nfor (int $i = 0; $i < $tmp .len; $i ++) {')
-		}
 		if is_arr {
-			xP.genln('$var_type $val = (($var_type *) ${tmp}.data)[$i];')
+			xP.gen_for_header(i, tmp, var_type, val)
 		}
 		else if is_str {
-			xP.genln('$var_type $val = (($var_type *) ${tmp}.str)[$i];')
+			xP.gen_for_str_header(i, tmp, var_type, val)
 		}
 		else if is_range {
-			xP.genln('$var_type $val = $i;')
+			xP.gen_for_range_header(i, range_end, tmp, var_type, val)
 		}
-	}
-	else {
+	} else {
 		// `for a < b {`
 		xP.gen('while (')
 		xP.check_types(xP.bool_expression(), 'bool')
@@ -3319,6 +3156,7 @@ fn (xP mut Parser) switch_statement() {
 	}
 	xP.cgen.start_tmp()
 	typ := xP.bool_expression()
+	is_str := typ == 'string'
 	expr := xP.cgen.end_tmp()
 	xP.check(.LCBR)
 	mut i := 0
@@ -3346,13 +3184,16 @@ fn (xP mut Parser) switch_statement() {
 		mut got_comma := false
 		for {
 			if got_comma {
-				xP.gen(') ||  ')
+				if is_str {
+					xP.gen(')')
+				}	
+				xP.gen(' || ')
 			}
 			if typ == 'string' {
 				xP.gen('string_eqeq($expr, ')
 			}
 			else {
-				xP.gen('($expr == ')
+				xP.gen('$expr == ')
 			}
 			if xP.tk == .key_case || xP.tk == .key_default {
 				xP.check(xP.tk)
@@ -3370,7 +3211,10 @@ fn (xP mut Parser) switch_statement() {
 		else {
 			xP.check(.ARROW)
 		}
-		xP.gen(')) {')
+		if is_str {
+			xP.gen(')')
+		}
+		xP.gen(') {')
 		xP.genln('/* case */')
 		xP.statements()
 		all_cases_return = all_cases_return && xP.returns
@@ -3678,7 +3522,7 @@ fn (xP mut Parser) go_statement() {
 	if xP.peek() == .DOT {
 		var_name := xP.lit
 		var := xP.cur_fn.find_var(var_name)
-		xP.cur_fn.mark_var_used(var)
+		xP.mark_var_used(var)
 		xP.next()
 		xP.check(.DOT)
 		typ := xP.table.find_type(var.typ)

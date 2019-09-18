@@ -6,7 +6,7 @@ module main
 
 import os
 
-fn (xQ mut UTxQ) generate_UTxQCompiler_flags_for_hotcode_reloading() []string {
+fn (xQ &UTxQ) generate_UTxQCompiler_flags_for_hotcode_reloading() []string {
   mut a := []string
 	if xQ.pref.is_live || xQ.pref.is_so {
 		// See 'man dlopen', and test running a GUI program compiled with -live
@@ -20,7 +20,7 @@ fn (xQ mut UTxQ) generate_UTxQCompiler_flags_for_hotcode_reloading() []string {
   return a
 }
 
-fn (xQ mut UTxQ) generate_declarations_for_hotcode_reloading() {
+fn (xQ &UTxQ) generate_declarations_for_hotcode_reloading() {
   mut cgen := xQ.cgen
 	if xQ.os != .windows && xQ.os != .msvc {
 		if xQ.pref.is_so {
@@ -39,9 +39,9 @@ fn (xQ mut UTxQ) generate_declarations_for_hotcode_reloading() {
 	}
 }
 
-fn (xQ mut UTxQ) generate_code_for_hotcode_reloading() {
-  mut cgen := xQ.cgen
-
+fn (xQ mut UTxQ) generate_code_for_hot_reloading() {
+	mut cgen := xQ.cgen
+	
 	// Hot code reloading
 	if xQ.pref.is_live {
 		file := xQ.dir

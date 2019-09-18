@@ -228,7 +228,7 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 	// -w: no warnings
 	// 2 unicode defines
 	// /Fo sets the object file name - needed so we can clean up after ourselves properly
-	mut a := ['-w', '/we4013', '/volatile:ms', '/D_UNICODE', '/DUNICODE', '/Fo"$out_name_obj"']
+	mut a := ['-w', '/we4013', '/volatile:ms', '/Fo"$out_name_obj"']
 
 	if xQ.pref.is_prod {
 		a << '/O2'
@@ -432,7 +432,7 @@ fn build_thirdparty_obj_file_with_msvc(path string) {
 
 	//println('cfiles: $cfiles')
 
-	cmd := '""$msvc.full_cl_exe_path" /volatile:ms /Z7 $include_string /c $cfiles /Fo"$obj_path" /D_UNICODE /DUNICODE"'
+	cmd := '""$msvc.full_cl_exe_path" /volatile:ms /Z7 $include_string /c $cfiles /Fo"$obj_path""'
 	//NB: the quotes above ARE balanced.
 	println('thirdparty cmd line: $cmd')
 	res := os.exec(cmd) or {

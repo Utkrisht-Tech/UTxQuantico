@@ -22,6 +22,10 @@ public:
 // For C strings only
 fn C.strlen(s byteptr) int
 
+public fn xQStrlen(s byteptr) int {
+	return C.strlen(*char(s))
+}
+
 fn todo() { }
 
 // Converts a C string to a UTxQ string.
@@ -50,7 +54,7 @@ fn tos2(s byteptr) string {
 	if isnull(s) {
 		panic('tos2: null string')
 	}
-	len := C.strlen(s)
+	len := xQStrlen(s)
 	res := tos(s, len)
 	return res
 }
@@ -78,10 +82,9 @@ public fn (s string) replace(rep, with string) string {
 	if s.len == 0 || rep.len == 0 {
 		return s
 	}
-	// println('"$s" replace  "$rep" with "$with" rep.len=$rep.len')
 	// TODO PERF Allocating ints is expensive. Should be a stack array
 	// Get locations of all reps within this string
-	mut idxs := []int{}
+	mut idxs := []int
 	mut rem := s
 	mut rstart := 0
 	for {
@@ -129,34 +132,34 @@ public fn (s string) replace(rep, with string) string {
 }
 
 public fn (s string) int() int {
-	return C.atoi(s.str)
+	return C.atoi(*char(s.str))
 }
 
 
 public fn (s string) i64() i64 {
-	return C.atoll(s.str)
+	return C.atoll(*char(s.str))
 }
 
 public fn (s string) f32() f32 {
-	return C.atof(s.str)
+	return C.atof(*char(s.str))
 }
 
 public fn (s string) f64() f64 {
-	return C.atof(s.str)
+	return C.atof(*char(s.str))
 }
 
 public fn (s string) u32() u32 {
-	return C.strtoul(s.str, 0, 0)
+	return C.strtoul(*char(s.str), 0, 0)
 }
 
 public fn (s string) u64() u64 {
-	return C.strtoull(s.str, 0, 0)
-	//return C.atoll(s.str) // temporary fix for tcc on windows.
+	return C.strtoull(*char(s.str), 0, 0)
+	//return C.atoll(*char(s.str)) // temporary fix for tcc on windows.
 }
 
 // ==
 fn (s string) eq(a string) bool {
-	if isnull(s.str) {
+	if isnull(s.str) { // This should never happen
 		panic('string.eq(): null string')
 	}
 	if s.len != a.len {
@@ -352,35 +355,55 @@ public fn (s string) substr(start, end int) string {
 	return res
 }
 
-// KMP search
-public fn (s string) index(p string) int {
+public fn (s string) index_old(p string) int {
 	if p.len > s.len {
 		return -1
 	}
-	mut prefix := [0; p.len]
-	mut j := 0
-	for i := 1; i < p.len; i++ {
-		for p[j] != p[i] && j > 0 {
-			j = prefix[j - 1]
-		}
-		if p[j] == p[i] {
+	mut i := 0
+	for i < s.len {
+		mut j := 0
+		mut ii := i
+		for j < p.len && s[ii] == p[j] {
 			j++
-		}
-		prefix[i] = j
-	}
-	j = 0
-	for i := 0; i < s.len; i++ {
-		for p[j] != s[i] && j > 0 {
-			j = prefix[j - 1]
-		}
-		if p[j] == s[i] {
-			j++
+			ii++
 		}
 		if j == p.len {
 			return i - p.len + 1
 		}
+		i++
 	}
 	return -1
+}
+
+// KMP search
+public fn (s string) index(p string) int {
+    if p.len > s.len {
+        return -1
+    }
+    mut prefix := [0].repeat2(p.len)
+    mut j := 0
+    for i := 1; i < p.len; i++ {
+        for p[j] != p[i] && j > 0 {
+            j = prefix[j - 1]
+        }
+        if p[j] == p[i] {
+            j++
+        }
+        prefix[i] = j
+    }
+    j = 0
+    for i := 0; i < s.len; i++ {
+        for p[j] != s[i] && j > 0 {
+            j = prefix[j - 1]
+        }
+        if p[j] == s[i] {
+            j++
+        }
+    	if j == p.len {
+            return i - p.len + 1
+        }
+    }
+        return -1
 }
 
 public fn (s string) index_any(chars string) int {
@@ -876,7 +899,7 @@ public fn (s string) bytes() []byte {
 	if s.len == 0 {
 		return []byte
 	}
-	mut buf := [byte(0); s.len]
+	mut buf := [byte(0)].repeat2(s.len)
 	C.memcpy(buf.data, s.str, s.len)
 	return buf
 }

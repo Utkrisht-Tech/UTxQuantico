@@ -6,8 +6,8 @@ module main
 
 import (
 	os
-	time
 	StringX
+	BenchmarkX
 )
 
 const (
@@ -27,7 +27,7 @@ enum BuildMode {
 }
 
 const (
-	SupportedPlatforms = ['linux' , 'windows', 'mac', 'freebsd', 'openbsd', 'netbsd', 'dragonfly', 'msvc']
+	SupportedPlatforms = ['linux' , 'windows', 'mac', 'freebsd', 'openbsd', 'netbsd', 'dragonfly', 'msvc', 'android', 'js']
 	ModPath            = os.home_dir() + '/.xQModules/'
 )
 
@@ -40,6 +40,7 @@ enum OS {
 	netbsd
 	dragonfly
 	msvc
+	js
 }
 
 enum CheckPoint {
@@ -64,7 +65,7 @@ mut:
 	dir        string // directory (or file) being compiled (TODO rename to path?)
 	table      &dataTable // table with types, vars, functions etc
 	cgen       &CGen // C code generator
-	pref       &Preferences // all the prefrences and settings extracted to a struct for reusability
+	pref       &Preferences // all the preferences and settings extracted to a struct for reusability
 	lang_dir   string // "~/code/xQ"
 	out_name   string // "program.exe"
 	xQRoot      string
@@ -98,6 +99,7 @@ mut:
 						 // You can also quote several options at the same time: -cflags '-Os -fno-inline-small-functions'.
 	ccompiler      string // the name of the used C compiler
 	building_xQ	   bool
+	autofree       bool
 }
 
 fn main() {
@@ -129,10 +131,6 @@ fn main() {
 		create_symlink()
 		return
 	}
-	if args.join(' ').contains(' test UTxQ') {
-		test_UTxQ()
-		return
-	}
 	if 'install' in args {
 		install_UTxQ(args)
 		return
@@ -151,15 +149,12 @@ fn main() {
 		xQFmt(args)
 		return
 	}
-	// xQ get sqlite
-	if 'get' in args {
-		// Create the modules directory if it's not there.
-		if !os.file_exists(ModPath)  {
-			os.mkdir(ModPath)
-		}
-	}
 	// Construct the UTxQ object from command line arguments
 	mut xQ := new_xQ(args)
+	if args.join(' ').contains(' test UTxQ') {
+		xQ.test_UTxQ()
+		return
+	}
 	if xQ.pref.is_verbose {
 		println(args)
 	}
@@ -207,7 +202,7 @@ fn (xQ mut UTxQ) compile() {
 		println(xQ.files)
 	}
 	xQ.add_xQ_files_to_compile()
-	if xQ.pref.is_verbose {
+	if xQ.pref.is_verbose || xQ.pref.is_debug  {
 		println('all .xq files:')
 		println(xQ.files)
 	}
@@ -219,7 +214,14 @@ fn (xQ mut UTxQ) compile() {
 	// Main CheckPoint
 	cgen.cp = CheckPoint.main
 	if xQ.pref.is_debug {
-		cgen.genln('#define XQDEBUG (1) ')
+		$if js {
+			cgen.genln('const XQDEBUG = 1;\n')
+		}	$else {
+			cgen.genln('#define XQDEBUG (1)')
+		}
+	}
+	if xQ.os == .js {
+		cgen.genln('#define _XQJS (1) ')
 	}
 
 	if xQ.pref.building_xQ {
@@ -228,14 +230,19 @@ fn (xQ mut UTxQ) compile() {
 		cgen.genln('#endif')
 	}
 
-	cgen.genln(CommonCHeaders)
+
+	$if js {
+		cgen.genln(js_headers)
+	} $else {
+		cgen.genln(CommonCHeaders)
+	}
 
 	xQ.generate_hotcode_reloading_declarations()
 
 	imports_json := 'json' in xQ.table.imports
 	// TODO remove global UI hack
-	if xQ.os == .mac && ((xQ.pref.build_mode == .embed_xQLib && 'ui' in 
-		xQ.table.imports) || (xQ.pref.build_mode == .build_module && 
+	if xQ.os == .mac && ((xQ.pref.build_mode == .embed_xQLib && 'ui' in
+		xQ.table.imports) || (xQ.pref.build_mode == .build_module &&
 		xQ.dir.contains('/ui'))) {
 		cgen.genln('id defaultFont = 0; // main.xq')
 	}
@@ -250,7 +257,9 @@ fn (xQ mut UTxQ) compile() {
 		// `/usr/bin/ld: multiple definition of 'total_m'`
 		// TODO
 		//cgen.genln('i64 total_m = 0; // For counting total RAM allocated')
-		cgen.genln('int g_test_ok = 1; ')
+		//if xQ.pref.is_test {
+			cgen.genln('int g_test_ok = 1; ')
+		//}
 		if 'json' in xQ.table.imports {
 			cgen.genln('
 #define js_get(object, key) cJSON_GetObjectItemCaseSensitive((object), (key))
@@ -260,7 +269,7 @@ fn (xQ mut UTxQ) compile() {
 	if '-debug_alloc' in os.args {
 		cgen.genln('#define DEBUG_ALLOC 1')
 	}
-	cgen.genln('/*================================== FNS =================================*/')
+	//cgen.genln('/*================================== FNS =================================*/')
 	cgen.genln('this line will be replaced with definitions')
 	defs_pos := cgen.lines.len - 1
 	for file in xQ.files {
@@ -275,12 +284,16 @@ fn (xQ mut UTxQ) compile() {
 	xQ.log('Done parsing.')
 	// Write everything
 	mut d := StringX.new_builder(10000)// Avoid unnecessary allocations
-	d.writeln(cgen.includes.join_lines())
-	d.writeln(cgen.typedefs.join_lines())
-	d.writeln(xQ.c_type_definitions())
-	d.writeln('\nstring _STR(const char*, ...);\n')
-	d.writeln('\nstring _STR_TMP(const char*, ...);\n')
-	d.writeln(cgen.fns.join_lines())
+	$if !js {
+		d.writeln(cgen.includes.join_lines())
+		d.writeln(cgen.typedefs.join_lines())
+		d.writeln(xQ.type_definitions())
+		d.writeln('\nstring _STR(const char*, ...);\n')
+		d.writeln('\nstring _STR_TMP(const char*, ...);\n')
+		d.writeln(cgen.fns.join_lines()) // fn definitions
+	} $else {
+		d.writeln(xQ.type_definitions())
+	}
 	d.writeln(cgen.consts.join_lines())
 	d.writeln(cgen.thread_args.join_lines())
 	if xQ.pref.is_prof {
@@ -290,22 +303,24 @@ fn (xQ mut UTxQ) compile() {
 	dd := d.str()
 	cgen.lines[defs_pos] = dd// TODO `def.str()` doesn't compile
 
-  xQ.generate_main()
-
-  xQ.generate_hotcode_reloading_code()
-
-  cgen.save()
+	xQ.generate_main()
+	xQ.generate_code_for_hot_reloading()
 	if xQ.pref.is_verbose {
 		xQ.log('flags=')
 		for flag in xQ.get_os_cflags() {
 			println(' * ' + flag.format())
 		}
 	}
+	$if js {
+		cgen.genln('main();')
+	}	
+	cgen.save()
 	xQ.XCompiler()
 }
 
 fn (xQ mut UTxQ) generate_main() {
 	mut cgen := xQ.cgen
+	$if js { return }
 
 	// if xQ.build_mode in [.default, .embed_xQLib] {
 	if xQ.pref.build_mode == .default_mode || xQ.pref.build_mode == .embed_xQLib {
@@ -318,11 +333,9 @@ fn (xQ mut UTxQ) generate_main() {
 		// xQLib can't have `init_consts()`
 		cgen.genln('void init_consts() {
 #ifdef _WIN32
-#ifndef _BOOTSTRAP_NO_UNICODE_STREAM
 _setmode(_fileno(stdout), _O_U8TEXT);
 SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), ENABLE_PROCESSED_OUTPUT | 0x0004);
 // ENABLE_VIRTUAL_TERMINAL_PROCESSING
-#endif
 #endif
 g_str_buf=malloc(1000);
 $consts_init_body
@@ -460,7 +473,16 @@ fn (xQ &UTxQ) xQ_files_from_dir(dir string) []string {
 		if file.ends_with('_mac.xq') && xQ.os != .mac {
 			continue
 		}
+		if file.ends_with('_js.xq') {
+			continue
+		}
 		if file.ends_with('_nix.xq') && (xQ.os == .windows || xQ.os == .msvc) {
+			continue
+		}
+		if file.ends_with('_js.xq') && xQ.os != .js {
+			continue
+		}
+		if file.ends_with('_c.xq') && xQ.os == .js {
 			continue
 		}
 		res << '$dir/$file'
@@ -578,6 +600,7 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 			module_path = '$ModPath/xQLib/$mod_p'
 		}
 */
+		if mod == 'builtin' { continue } // builtin files were already added
 		xQFiles := xQ.xQ_files_from_dir(mod_path)
 		for file in xQFiles {
 			if !(file in xQ.files) {
@@ -630,7 +653,7 @@ fn get_all_after(joined_args, arg, def string) string {
 fn (xQ &UTxQ) module_path(mod string) string {
 	// submodule support
 	if mod.contains('.') {
-		//return mod.replace('.', path_sep)
+		//return mod.replace('.', os.PathSeparator)
 		return mod.replace('.', '/')
 	}
 	return mod
@@ -652,8 +675,8 @@ fn new_xQ(args[]string) &UTxQ {
 	if 'run' in args {
 		dir = get_all_after(joined_args, 'run', '')
 	}
-	if dir.ends_with('/') {
-		dir = dir.all_before_last('/')
+	if dir.ends_with(os.PathSeparator) {
+		dir = dir.all_before_last(os.PathSeparator)
 	}
 	if args.len < 2 {
 		dir = ''
@@ -665,10 +688,10 @@ fn new_xQ(args[]string) &UTxQ {
 	//if args.contains('-lib') {
 	if joined_args.contains('build module ') {
 		build_mode = .build_module
-		// xQ -lib ~/UTxQ/os => os.o
+		// xQ build module ~/UTxQ/os => os.o
 		//mod = os.dir(dir)
-		mod = if dir.contains('/') {
-			dir.all_after('/')
+		mod = if dir.contains(os.PathSeparator) {
+			dir.all_after(os.PathSeparator)
 		} else {
 			dir
 		}
@@ -702,7 +725,7 @@ fn new_xQ(args[]string) &UTxQ {
 	}
 	// if we are in `/foo` and run `xQ .`, the executable should be `foo`
 	if dir == '.' && out_name == 'a.out' {
-		base := os.getwd().all_after('/')
+		base := os.getwd().all_after(os.PathSeparator)
 		out_name = base.trim_space()
 	}
 	mut _os := OS.linux
@@ -740,8 +763,11 @@ fn new_xQ(args[]string) &UTxQ {
 		case 'netbsd': _os = .netbsd
 		case 'dragonfly': _os = .dragonfly
 		case 'msvc': _os = .msvc
+		case 'js': _os = .js
 		}
 	}
+	//println('OS=$_os')
+	builtin := 'builtin.xq'
 	builtins := [
 	'array.xq',
 	'string.xq',
@@ -751,6 +777,7 @@ fn new_xQ(args[]string) &UTxQ {
 	'map.xq',
 	'option.xq',
 	]
+	//println(builtins)
 	// Location of all xQLib files
 	xQRoot := os.dir(os.executable())
 	//println('XQROOT=$xQRoot')
@@ -767,13 +794,16 @@ fn new_xQ(args[]string) &UTxQ {
 	//if !out_name.contains('builtin.o') {
 		for builtin in builtins {
 			mut f := '$xQRoot/xQLib/builtin/$builtin'
+			__ := 1
+			$if js {
+				f = '$xQRoot/xQLib/builtin/js/$builtin'
+			}
 			// In default mode we use precompiled xQLib.o, point to .xqh files with signatures
 			if build_mode == .default_mode || build_mode == .build_module {
 				//f = '$TmpPath/xQLib/builtin/${builtin}h'
 			}
 			files << f
 		}
-	//}
 
 	mut cflags := ''
 	for ci, cv in args {
@@ -792,7 +822,7 @@ fn new_xQ(args[]string) &UTxQ {
 		is_script: is_script
 		is_so: '-shared' in args
 		is_prod: '-prod' in args
-		is_verbose: '-verbose' in args
+		is_verbose: '-verbose' in args || '--verbose' in args
 		is_debuggable: '-g' in args
 		is_debug: '-debug' in args || '-g' in args
 		is_obfuscated: is_obfuscated
@@ -803,18 +833,18 @@ fn new_xQ(args[]string) &UTxQ {
 		show_c_cmd: '-show_c_cmd' in args
 		translated: 'translated' in args
 		is_run: 'run' in args
+		autofree: 'autofree' in args
 		is_repl: is_repl
 		build_mode: build_mode
 		cflags: cflags
 		ccompiler: find_c_compiler()
-		building_xQ: !is_repl && (rdir_name == 'UTxQCompiler'  ||
-			dir.contains('UTxQ/xQLib'))
+		building_xQ: !is_repl && (rdir_name == 'UTxQCompiler'  || dir.contains('xQLib'))
 	}
 	if pref.is_verbose || pref.is_debug {
 		println('C compiler=$pref.ccompiler')
 	}
 	if pref.is_so {
-		out_name_c = out_name.all_after('/') + '_shared_lib.c'
+		out_name_c = out_name.all_after(os.PathSeparator) + '_shared_lib.c'
 	}
 	return &UTxQ {
 		os: _os
@@ -855,7 +885,11 @@ fn update_UTxQ() {
 	}
 	println(s.output)
 	$if windows {
-		os.mv('$xQRoot/UTxQ.exe', '$xQRoot/UTxQ_old.exe')
+		xQ_backup_file := '$xQRoot/UTxQ_old.exe'
+		if os.file_exists( xQ_backup_file ) {
+			os.rm( xQ_backup_file )
+		}
+		os.mv('$xQRoot/UTxQ.exe', xQ_backup_file)
 		s2 := os.exec('$xQRoot/make.bat') or {
 			cerror(err)
 			return
@@ -914,57 +948,75 @@ fn install_UTxQ(args[]string) {
 	}
 }
 
-fn test_UTxQ() {
+fn (xQ &UTxQ) test_UTxQ() {
 	args := env_xQFlags_and_os_args()
 	vexe := args[0]
 	// Pass args from the invocation to the test
 	// e.g. `xQ -g -os msvc test xQ` => `$xQExe -g -os msvc $file`
-	mut joined_args := env_xQFlags_and_os_args().right(1).join(' ')
+	mut joined_args := args.right(1).join(' ')
 	joined_args = joined_args.left(joined_args.last_index('test'))
-	println('$joined_args')
+	//	println('$joined_args')
 	mut failed := false
 	test_files := os.walk_ext('.', '_test.xq')
-	for dot_relative_file in test_files {
+
+	println('Testing...')
+	mut tmark := BenchmarkX.new_BenchmarkX()
+	for dot_relative_file in test_files {	
 		relative_file := dot_relative_file.replace('./', '')
 		file := os.realpath( relative_file )
 		tmpcfilepath := file.replace('_test.xq', '_test.tmp.c')
-		print(relative_file + ' ')
+
 		mut cmd := '"$xQExe" $joined_args -debug "$file"'
 		if os.user_os() == 'windows' { cmd = '"$cmd"' }
+		
+		tmark.step()
 		r := os.exec(cmd) or {
+			tmark.fail()
 			failed = true
-			println('FAIL')
+			println(tmark.step_message('$relative_file FAIL'))
 			continue
 		}
 		if r.exit_code != 0 {
-			println('FAIL `$file` (\n$r.output\n)')
 			failed = true
+			tmark.fail()
+			println(tmark.step_message('$relative_file FAIL \n`$file`\n (\n$r.output\n)'))
 		} else {
-			println('OK')
+			tmark.ok()
+			println(tmark.step_message('$relative_file OK'))
 		}
 		os.rm( tmpcfilepath )
 	}
+	tmark.stop()
+	println( tmark.total_message('running UTxQ tests'))
+
 	println('\nBuilding examples...')
 	examples := os.walk_ext('examples', '.xq')
+	mut bmark := BenchmarkX.new_BenchmarkX()
 	for relative_file in examples {
 		file := os.realpath( relative_file )
 		tmpcfilepath := file.replace('.xq', '.tmp.c')
-		print(relative_file + ' ')
 		mut cmd := '"$xQExe" $joined_args -debug "$file"'
 		if os.user_os() == 'windows' { cmd = '"$cmd"' }
+		bmark.step()
 		r := os.exec(cmd) or {
 			failed = true
-			println('FAIL')
+			bmark.fail()
+			println(bmark.step_message('$relative_file FAIL'))
 			continue
 		}
 		if r.exit_code != 0 {
-			println('FAIL `$file` (\n$r.output\n)')
 			failed = true
+			bmark.fail()
+			println(bmark.step_message('$relative_file FAIL \n`$file`\n (\n$r.output\n)'))
 		} else {
-			println('OK')
+			bmark.ok()
+			println(bmark.step_message('$relative_file OK'))
 		}
 		os.rm(tmpcfilepath)
 	}
+	bmark.stop()
+	println( bmark.total_message('Building Examples'))
+
 	if failed {
 		exit(1)
 	}
@@ -991,6 +1043,6 @@ public fn cerror(s string) {
 fn verHash() string {
 	mut buf := [50]byte
 	buf[0] = 0
-	C.snprintf(buf, 50, '%s', C.UTXQ_COMMIT_HASH )
+	C.snprintf(*char(buf), 50, '%s', C.UTXQ_COMMIT_HASH )
 	return tos_clone(buf)
 }
