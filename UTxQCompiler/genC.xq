@@ -41,7 +41,7 @@ fn (xP mut Parser) gen_var_decl(name string, is_static bool) string {
 		xP.statements()
 		xP.genln('$typ $name = *($typ*) $tmp . data;')
 		if !xP.returns && xP.prev_tk2 != .key_continue && xP.prev_tk2 != .key_break {
-			xP.error('`or` block must return/continue/break/panic')
+			xP.error('`or` block must return/exit/continue/break/panic')
 		}
 		xP.returns = false
 		return typ
@@ -154,7 +154,7 @@ fn (table mut dataTable) fn_gen_name(f &Fn) string {
 		name = name.replace('-', 'minus')
 	}
 	// Avoid name conflicts (with things like abs(), print() etc).
-	// Generate b_abs(), b_print()
+	// Generate xQ_abs(), xQ_print()
 	// TODO duplicate functionality
 	if f.mod == 'builtin' && f.name in CReserved {
 		return 'xQ_$name'

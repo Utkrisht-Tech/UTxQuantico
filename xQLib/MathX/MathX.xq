@@ -4,8 +4,6 @@
 
 module MathX
 
-#include <math.h>
-
 // NOTE:
 // All functions are sorted alphabetically.
 
@@ -49,6 +47,8 @@ public fn abs(a f64) f64 {
 	}
 	return a
 }
+
+fn C.acos(a f64) f64
 
 // acos: Calculates inverse cosine (arccosine).
 public fn acos(a f64) f64 {

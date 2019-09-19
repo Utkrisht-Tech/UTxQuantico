@@ -194,7 +194,7 @@ fn (xP mut Parser) insert_query(fn_sh int) {
 	xP.check(.LPAR)
 	var_name := xP.check_name()
 	xP.check(.RPAR)
-	var := xP.cur_fn.find_var(var_name)
+	var := xP.cur_fn.find_var(var_name) or { return }
 	typ := xP.table.find_type(var.typ)
 	mut fields := []Var
 	for i, field in typ.fields {

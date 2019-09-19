@@ -224,29 +224,21 @@ fn (xP mut Parser) comptime_method_call(typ Type) {
 }
 
 fn (xP mut Parser) gen_array_str(typ Type) {
-	//println('gen array str "$typ.name"')
-	xP.table.add_method(typ.name, Fn{
-		name: 'str',
+	xP.add_method(typ.name, Fn{
+		name: 'str'
 		typ: 'string'
 		args: [Var{typ: typ.name, is_arg:true}]
 		is_method: true
 		is_public: true
 		receiver_typ: typ.name
 	})
-	/*
-	tt := xP.table.find_type(typ.name)
-	for m in tt.methods {
-		println(m.name + ' ' + m.typ)
-		}
-		*/
-	t := typ.name
-	elm_type := t.right(6)
+	elm_type := typ.name.right(6)
 	elm_type2 := xP.table.find_type(elm_type)
 	if xP.typ_to_format(elm_type, 0) == '' && !xP.table.type_has_method(elm_type2, 'str') {
 		xP.error('cant print ${elm_type}[], unhandled print of ${elm_type}')
 	}
 	xP.cgen.fns << '
-	string ${t}_str($t a) {
+	string ${typ.name}_str($typ.name a) {
 		StringX__Builder sb = StringX__new_builder(a.len * 3);
 		StringX__Builder_write(&sb, tos2("[")) ;
 		for (int i = 0; i < a.len; i++) {

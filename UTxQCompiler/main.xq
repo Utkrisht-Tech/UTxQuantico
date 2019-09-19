@@ -100,6 +100,7 @@ mut:
 	ccompiler      string // the name of the used C compiler
 	building_xQ	   bool
 	autofree       bool
+	compress	   bool
 }
 
 fn main() {
@@ -183,6 +184,25 @@ fn main() {
 		xQ.run_compiled_executable_and_exit()
 	}
 
+	// TODO remove
+	if xQ.pref.autofree {
+		println('Started freeing UTxQ struct')
+		xQ.table.typesmap.free()
+		xQ.table.obf_ids.free()
+		xQ.cgen.lines.free()
+		free(xQ.cgen)
+		for _, f in xQ.table.fns {
+			f.local_vars.free()
+			f.args.free()
+			//f.defer_text.free()
+		}	
+		xQ.table.fns.free()
+		free(xQ.table)
+		//for p in parsers {
+
+		//}
+		println('done!')
+	}
 }
 
 fn (xQ mut UTxQ) compile() {
@@ -210,6 +230,8 @@ fn (xQ mut UTxQ) compile() {
 	for file in xQ.files {
 		mut xP := xQ.new_parser(file)
 		xP.parse(.decl)
+
+		
 	}
 	// Main CheckPoint
 	cgen.cp = CheckPoint.main
@@ -833,7 +855,8 @@ fn new_xQ(args[]string) &UTxQ {
 		show_c_cmd: '-show_c_cmd' in args
 		translated: 'translated' in args
 		is_run: 'run' in args
-		autofree: 'autofree' in args
+		autofree: '-autofree' in args
+		compress: '-compress' in args
 		is_repl: is_repl
 		build_mode: build_mode
 		cflags: cflags
@@ -890,7 +913,7 @@ fn update_UTxQ() {
 			os.rm( xQ_backup_file )
 		}
 		os.mv('$xQRoot/UTxQ.exe', xQ_backup_file)
-		s2 := os.exec('$xQRoot/make.bat') or {
+		s2 := os.exec('"$xQRoot/make.bat"') or {
 			cerror(err)
 			return
 		}
@@ -949,6 +972,10 @@ fn install_UTxQ(args[]string) {
 }
 
 fn (xQ &UTxQ) test_UTxQ() {
+	if !os.dir_exists('xQLib') {
+		println('run "xQ test UTxQ" next to the xQLib/ directory')
+		exit(1)
+	}
 	args := env_xQFlags_and_os_args()
 	vexe := args[0]
 	// Pass args from the invocation to the test

@@ -17,8 +17,10 @@ struct Parser {
 	file_xPcguard  string // When xP.file_xPcguard != '', it contains a
 	                      // C ifdef guard clause that must be put before
 	                      // the #include directives in the parsed .xq file
-mut:
+
 	xQ             &UTxQ
+	pref           &Preferences // Preferences shared from UTxQ struct
+mut:
 	scanner        &Scanner
 	// tokens      []Token // TODO cache all tokens, right now they have to be scanned twice
 	token_idx      int
@@ -40,7 +42,6 @@ mut:
 	expected_type  string
 	tmp_count      int
 	is_script      bool
-	pref           &Preferences // Preferences shared from UTxQ struct
 	builtin_mod    bool
 	xQh_lines      []string
 	inside_if_expr bool
@@ -625,7 +626,7 @@ fn (xP mut Parser) struct_decl() {
 		if is_interface {
 			f := xP.interface_method(field_name, name)
 			if xP.first_cp() {
-				xP.table.add_method(typ.name, f)
+				xP.add_method(typ.name, f)
 			}
 			continue
 		}
@@ -1263,11 +1264,9 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 	//}
 	// Allow `num = 4` where `num` is an `?int`
 	if xP.assigned_type.starts_with('Option_') && expr_type == xP.assigned_type.right('Option_'.len) {
-		println('allowing option asss')
 		expr := xP.cgen.cur_line.right(pos)
 		left := xP.cgen.cur_line.left(pos)
 		typ := expr_type.replace('Option_', '')
-		//xP.cgen.cur_line = left + 'opt_ok($expr)'
 		xP.cgen.resetln(left + 'opt_ok($expr, sizeof($typ))')
 	}
 	else if !xP.builtin_mod && !xP.check_types_no_throw(expr_type, xP.assigned_type) {
@@ -1314,7 +1313,7 @@ fn (xP mut Parser) var_decl() {
 		name: name
 		typ: typ
 		is_mutable: is_mutable
-		is_alloc: xP.is_alloc
+		is_alloc: xP.is_alloc || typ.starts_with('array_')
 	})
 	//if xP.is_alloc { println('REG VAR IS ALLOC $name') }
 	xP.var_decl_name = ''
@@ -1478,44 +1477,37 @@ fn (xP mut Parser) name_expr() string {
 		name = xP.prepend_mod(name)
 	}
 	// Variable
-	mut v := xP.cur_fn.find_var(name)
-	// A hack to allow `newvar := Foo{ field: newvar }`
-	// Declare the variable so that it can be used in the initialization
-	if name == 'main__' + xP.var_decl_name {
-		v.name = xP.var_decl_name
-		v.typ = 'voidptr'
-		v.is_mutable = true
+	for { // TODO remove
+	mut v := xP.find_var_check_new_var(name) or { break }
+	if ptr {
+		xP.gen('& /*v*/ ')
 	}
-	if v.name.len != 0 {
-		if ptr {
-			xP.gen('& /*xQVar*/ ')
-		}
-		else if deref {
-			xP.gen('*')
-		}
-		mut typ := xP.var_expr(v)
-		// *var
-		if deref {
-			if !typ.contains('*') && !typ.ends_with('ptr') {
-				println('name="$name", t=$v.typ')
-				xP.error('dereferencing requires a pointer, but got `$typ`')
-			}
-			typ = typ.replace('ptr', '')// TODO
-			typ = typ.replace('*', '')// TODO
-		}
-		// &var
-		else if ptr {
-			typ += '*'
-		}
-		if xP.inside_return_expr {
-			//println('marking $v.name returned')
-			xP.mark_var_returned(v)
-			// v.is_returned = true // TODO modifying a local variable
-			// that's not used afterwards, this should be a compilation
-			// error
-		}	
-		return typ
+	else if deref {
+		xP.gen('*')
 	}
+	mut typ := xP.var_expr(v)
+	// *var
+	if deref {
+		if !typ.contains('*') && !typ.ends_with('ptr') {
+			println('name="$name", t=$v.typ')
+			xP.error('Dereferencing requires a pointer, but got `$typ`')
+		}
+		typ = typ.replace('ptr', '')// TODO
+		typ = typ.replace('*', '')// TODO
+	}
+	// &var
+	else if ptr {
+		typ += '*'
+	}
+	if xP.inside_return_expr {
+		//println('marking $v.name returned')
+		xP.mark_var_returned(v)
+		// v.is_returned = true // TODO modifying a local variable
+		// that's not used afterwards, this should be a compilation
+		// error
+	}	
+	return typ
+	} // TODO REMOVE for{}
 	// if known_type || is_c_struct_init || (xP.first_cp() && xP.peek() == .LCBR) {
 	// known type? int(4.5) or Color.green (enum)
 	if xP.table.known_type(name) {
@@ -1569,9 +1561,9 @@ fn (xP mut Parser) name_expr() string {
 			xP.next()
 			return 'int'
 		}
-		// C fn
+		// C function
 		f := Fn {
-			name: name// .replace('c_', '')
+			name: name
 			is_c: true
 		}
 		xP.is_c_fn_call = true
@@ -1579,25 +1571,26 @@ fn (xP mut Parser) name_expr() string {
 		xP.is_c_fn_call = false
 		// Try looking it up. Maybe its defined with "C.fn_name() fn_type",
 		// then we know what type it returns
-		cfn := xP.table.find_fn(name)
-		// Not Found? Return 'void*'
-		if cfn.name == '' {
+		cfn := xP.table.find_fn(name) or {
+			// Not Found? Return 'void*'
 			//return 'cvoid' //'void*'
+			if false {
+			xP.warn('\ndefine imported C function with ' +
+				'`fn C.$name([args]) [return_type]`\n')
+			}
 			return 'void*'
 		}
 		return cfn.typ
 	}
 	// Constant
-	c := xP.table.find_const(name)
-	if c.name != '' && ptr && !c.is_global {
-		xP.error('cannot take the address of constant `$c.name`')
-	}
-	if c.name.len != 0 {
-		if ptr {
+	for {
+		c := xP.table.find_const(name) or { break }
+		if ptr && !c.is_global {
+			xP.error('Cannot take the address of constant `$c.name`')
+		} else if ptr && c.is_global {
 			// c.ptr = true
 			xP.gen('& /*const*/ ')
 		}
-		xP.log('calling var expr')
 		mut typ := xP.var_expr(c)
 		if ptr {
 			typ += '*'
@@ -1605,35 +1598,34 @@ fn (xP mut Parser) name_expr() string {
 		return typ
 	}
 	// Function (not method btw, methods are handled in dot())
-	mut f := xP.table.find_fn(name)
-	if f.name == '' {
-		// We are in a second CheckPoint, that means this function was not defined, throw an error.
+	mut f := xP.table.find_fn(name) or {
+		// We are in the second CheckPoint, that means this function was not defined, throw an error.
 		if !xP.first_cp() {
 			// UTxQuantico script? Try os module.
+			// TODO
 			if xP.xQ_script {
-				name = name.replace('main__', 'os__')
-				f = xP.table.find_fn(name)
+				//name = name.replace('main__', 'os__')
+				//f = xP.table.find_fn(name)
 			}
-			if f.name == '' {
-				// Check for misspelled function / variable / module names
-				suggested := xP.table.identify_typo(name, xP.cur_fn, xP.import_table)
-				if suggested != '' {
-					xP.error('Undefined: `$name`. Did you mean: $suggested')
+			// Check for misspelled function / variable / module
+			suggested := xP.table.identify_typo(name, xP.cur_fn, xP.import_table)
+			if suggested != '' {
+				xP.error('Undefined: `$name`. Did you mean:$suggested')
+			}
+			// If orig_name is a mod, then printing undefined: `mod` tells us nothing
+			// if xP.table.known_mod(orig_name) {
+			if xP.table.known_mod(orig_name) || xP.import_table.known_alias(orig_name) {
+				name = name.replace('__', '.').replace('_dot_', '.')
+				xP.error('undefined: `$name`')
+			}
+			else {
+				if orig_name == 'i32' {
+					println('`i32` alias was removed, use `int` instead')
 				}
-				// If orig_name is a mod, then printing undefined: `mod` tells us nothing
-				// if xP.table.known_mod(orig_name) {
-				if xP.table.known_mod(orig_name) || xP.import_table.known_alias(orig_name) {
-					name = name.replace('__', '.').replace('_dot_', '.')
-					xP.error('undefined: `$name`')
+				if orig_name == 'u8' {
+					println('`u8` alias was removed, use `byte` instead')
 				}
-				else {
-					if orig_name == 'i32' {
-						println('`i32` alias was removed, use `int` instead')
-					}
-					if orig_name == 'u8' {
-						println('`u8` alias was removed, use `byte` instead')
-					}
-					xP.error('undefined: `$orig_name`')
+				xP.error('undefined: `$orig_name`')
 				}
 			}
 		} else {
@@ -1641,6 +1633,7 @@ fn (xP mut Parser) name_expr() string {
 			// First CheckPoint, the function can be defined later.
 			return 'void'
 		}
+		return 'void'
 	}
 	// no () after function, so function is an argument, just gen its name
 	// TODO verify this and handle errors
@@ -1772,7 +1765,7 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 		//println('ORM dot $str_typ')
 	//}
 	xP.check(.DOT)
-	typ := xP.find_type(str_typ)
+	mut typ := xP.find_type(str_typ)
 	if typ.name.len == 0 {
 		xP.error('dot(): cannot find type `$str_typ`')
 	}
@@ -1782,7 +1775,7 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 	}
 	field_name := xP.lit
 	xP.fgen(field_name)
-	xP.log('dot() field_name=$field_name typ=$str_typ')
+	//xP.log('dot() field_name=$field_name typ=$str_typ')
 	//if xP.fileis('main.xq') {
 		//println('dot() field_name=$field_name typ=$str_typ prev_tk=${prev_tk.str()}')
 	//}
@@ -1796,7 +1789,7 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 	if !typ.is_c && !xP.is_c_fn_call && !has_field && !has_method && !xP.first_cp() {
 		if typ.name.starts_with('Option_') {
 			opt_type := typ.name.right(7)
-			xP.error('unhandled option type: $opt_type?')
+			xP.error('unhandled option type: `?$opt_type`')
 		}
 		//println('error in dot():')
 		//println('fields:')
@@ -1817,7 +1810,7 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 	// field
 	if has_field {
 		struct_field := if typ.name != 'Option' { xP.table.var_cgen_name(field_name) } else { field_name }
-		field := xP.table.find_field(typ, struct_field)
+		field := xP.table.find_field(typ, struct_field) or { panic('field') }
 		if !field.is_mutable && !xP.has_immutable_field {
 			xP.has_immutable_field = true
 			xP.first_immutable_field = field
@@ -1848,7 +1841,10 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 		return field.typ
 	}
 	// method
-	method := xP.table.find_method(typ, field_name)
+	method := xP.table.find_method(typ, field_name) or {
+		xP.error('Could not find method `$field_name`') // should never happen
+		exit(1)
+	}
 	xP.fn_call(method, method_sh, '', str_typ)
 	// Methods returning `array` should return `array_string`
 	if method.typ == 'array' && typ.name.starts_with('array_') {
@@ -1869,7 +1865,7 @@ fn (xP mut Parser) dot(str_typ string, method_sh int) string {
 }
 
 enum IndexType {
-	none
+	noindex
 	str
 	map
 	array
@@ -1886,7 +1882,7 @@ fn get_index_type(typ string) IndexType {
 		return IndexType.ptr
 	}
 	if typ[0] == `[` { return IndexType.fixed_array }
-	return IndexType.none
+	return IndexType.noindex
 }
 
 fn (xP mut Parser) index_expr(typ_ string, fn_sh int) string {
@@ -2078,7 +2074,7 @@ fn (xP mut Parser) expression() string {
 		xP.fgen(' ')
 		xP.check(.key_in)
 		xP.fgen(' ')
-		xP.gen(', ')
+		xP.gen('), ')
 		arr_typ := xP.expression()
 		is_map := arr_typ.starts_with('map_')
 		if !arr_typ.starts_with('array_') && !is_map {
@@ -2090,10 +2086,10 @@ fn (xP mut Parser) expression() string {
 		}
 		// `typ` is element's type
 		if is_map {
-			xP.cgen.set_shadow(sh, '_IN_MAP( ')
+			xP.cgen.set_shadow(sh, '_IN_MAP( (')
 		}
 		else {
-			xP.cgen.set_shadow(sh, '_IN($typ, ')
+			xP.cgen.set_shadow(sh, '_IN($typ, (')
 		}
 		xP.gen(')')
 		return 'bool'
@@ -2225,7 +2221,14 @@ fn (xP mut Parser) factor() string {
 	mut typ := ''
 	tk := xP.tk
 	switch tk {
-	case .NUMBER:
+	case .key_none:
+		if !xP.expected_type.starts_with('Option_') {
+			xP.error('need "$xP.expected_type" got none')
+		}	
+		xP.gen('opt_none()')
+		xP.check(.key_none)
+		return xP.expected_type
+	case Token.NUMBER:
 		typ = 'int'
 		// Check if float (`1.0`, `1e+3`) but not if is hexa
 		if (xP.lit.contains('.') || (xP.lit.contains('e') || xP.lit.contains('E'))) &&
@@ -2353,10 +2356,10 @@ fn (xP mut Parser) assoc() string {
 	// println('assoc()')
 	xP.next()
 	name := xP.check_name()
-	if !xP.cur_fn.known_var(name) {
+	var := xP.cur_fn.find_var(name) or {
 		xP.error('unknown variable `$name`')
+		exit(1)
 	}
-	var := xP.cur_fn.find_var(name)
 	xP.check(.PIPE)
 	xP.gen('($var.typ){')
 	mut fields := []string// track the fields user is setting, the rest will be copied from the old object
@@ -2616,11 +2619,19 @@ fn (xP mut Parser) array_init() string {
 	mut is_integer := xP.tk == .NUMBER  // for `[10]int`
 	// fixed length arrays with a const len: `nums := [N]int`, same as `[10]int` basically
 	mut is_const_len := false
-	if xP.tk == .NAME {
-		c := xP.table.find_const(xP.prepend_mod(xP.lit))
-		if c.name != '' && c.typ == 'int' && xP.peek() == .RSBR && !xP.inside_const {
-			is_integer = true
-			is_const_len = true
+	if xP.tk == .NAME && !xP.inside_const {
+		const_name := xP.prepend_mod(xP.lit)
+		if xP.table.known_const(const_name) {
+			c := xP.table.find_const(const_name) or {
+				//xP.error('unknown const `$xP.lit`')
+				exit(1)
+			}	
+			if c.typ == 'int' && xP.peek() == .RSBR { //&& !xP.inside_const {
+				is_integer = true
+				is_const_len = true
+			} else {
+				xP.error('Bad fixed size array const `$xP.lit`')
+			}
 		}
 	}
 	lit := xP.lit
@@ -2771,7 +2782,7 @@ fn (xP mut Parser) struct_init(typ string) string {
 			if field in inited_fields {
 				xP.error('already initialized field `$field` in `$t.name`')
 			}
-			f := t.find_field(field)
+			f := t.find_field(field) or { panic('field') }
 			inited_fields << field
 			xP.gen_struct_field_init(field)
 			xP.check(.COLON)
@@ -3447,10 +3458,14 @@ fn (xP mut Parser) return_statement() {
 		else {
 			sh := xP.cgen.add_shadow()
 			xP.inside_return_expr = true
+			is_none := xP.tk == .key_none
+			xP.expected_type = xP.cur_fn.typ
 			expr_type := xP.bool_expression()
 			xP.inside_return_expr = false
-			// Automatically wrap an object inside an option if the function returns an option
-			if xP.cur_fn.typ.ends_with(expr_type) && xP.cur_fn.typ.starts_with('Option_') {
+			// Automatically wrap an object inside an option if the function
+			// returns an option
+			if xP.cur_fn.typ.ends_with(expr_type) && !is_none &&
+				xP.cur_fn.typ.starts_with('Option_') {
 				tmp := xP.get_tmp()
 				ret := xP.cgen.cur_line.right(sh)
 				typ := expr_type.replace('Option_', '')
@@ -3521,21 +3536,20 @@ fn (xP mut Parser) go_statement() {
 	// Method
 	if xP.peek() == .DOT {
 		var_name := xP.lit
-		var := xP.cur_fn.find_var(var_name)
+		var := xP.cur_fn.find_var(var_name) or { return }
 		xP.mark_var_used(var)
 		xP.next()
 		xP.check(.DOT)
 		typ := xP.table.find_type(var.typ)
-		method := xP.table.find_method(typ, xP.lit)
+		method := xP.table.find_method(typ, xP.lit) or { panic('go method') }
 		xP.async_fn_call(method, 0, var_name, var.typ)
 	}
 	// Normal function
 	else {
-		f := xP.table.find_fn(xP.lit)
-		if f.name == 'println' {
+		f := xP.table.find_fn(xP.lit) or { panic('fn') }
+		if f.name == 'println' || f.name == 'print' {
 			xP.error('`go` cannot be used with `println`')
 		}
-		// println(f.name)
 		xP.async_fn_call(f, 0, '', '')
 	}
 }
@@ -3616,7 +3630,7 @@ fn (xP mut Parser) attribute() {
 		xP.attr = xP.check_name()
 	}
 	xP.check(.RSBR)
-	if xP.tk == .key_function {
+	if xP.tk == .key_function || (xP.tk == .key_public && xP.peek() == .key_function) {
 		xP.fn_decl()
 		xP.attr = ''
 		return

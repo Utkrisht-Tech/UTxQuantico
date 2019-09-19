@@ -33,6 +33,7 @@ public fn _make(inpLen, cap, elem_size int) array {
 	return new_array(inpLen, cap, elem_size)
 }
 
+
 // Private function, used by UTxQ (`nums := [1, 2, 3]`)
 fn new_array_from_c_array(inpLen, cap, elem_size int, c_array voidptr) array {
 	arr := array {
@@ -72,21 +73,6 @@ fn array_repeat_old(val voidptr, no_of_repeats, elem_size int) array {
 }
 
 public fn (a array) repeat(no_of_repeats int) array {
-	arr := array {
-		len: no_of_repeats
-		cap: no_of_repeats
-		element_size: a.element_size
-		data: malloc(no_of_repeats * a.element_size)
-	}
-	val := a.data + 0 //no_of_repeats * a.element_size
-	for i := 0; i < no_of_repeats; i++ {
-		C.memcpy(arr.data + i * a.element_size, val, a.element_size)
-	}
-	return arr
-}
-
-// TODO remove
-public fn (a array) repeat2(no_of_repeats int) array {
 	arr := array {
 		len: no_of_repeats
 		cap: no_of_repeats

@@ -240,6 +240,31 @@ fn (xQ mut UTxQ) XCompiler() {
 	if !xQ.pref.is_debug && xQ.out_name_c != 'UTxQ.c' && xQ.out_name_c != 'UTxQ_macos.c' {
 		os.rm(xQ.out_name_c)
 	}
+	if xQ.pref.compress {
+		$if windows {
+			println('-compress does not work on Windows for now')
+			return
+		}
+		ret := os.system('strip $xQ.out_name')
+		if ret != 0 {
+			println('strip failed')
+			return
+		}
+		ret2 := os.system('upx --lzma -qqq $xQ.out_name')
+		if ret2 != 0 {
+			println('upx failed')
+			$if mac {
+				println('Install upx with `brew install upx`')
+			}	
+			$if linux {
+				println('install upx\n' +
+					'for example, on Debian/Ubuntu run `sudo apt install upx`')
+			}	
+			$if windows {
+				// :)
+			}	
+		}
+	}
 }
 
 

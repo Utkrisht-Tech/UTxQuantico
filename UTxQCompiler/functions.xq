@@ -33,7 +33,34 @@ mut:
 	//gen_types 	[]string
 }
 
-fn (f &Fn) find_var(name string) Var {
+fn (f &Fn) find_var(name string) ?Var {
+	for i in 0 .. f.var_idx {
+		if f.local_vars[i].name == name {
+			return f.local_vars[i]
+		}
+	}
+	return none
+}
+
+fn (xP &Parser) find_var_check_new_var(name string) ?Var {
+	for i in 0 .. xP.cur_fn.var_idx {
+		if xP.cur_fn.local_vars[i].name == name {
+			return xP.cur_fn.local_vars[i]
+		}
+	}
+	// A hack to allow `newvar := Foo{ field: newvar }`
+	// Declare the variable so that it can be used in the initialization
+	if name == 'main__' + xP.var_decl_name {
+		return Var{
+			name : xP.var_decl_name
+			typ : 'voidptr'
+			is_mut : true
+		}
+	}
+	return none
+}
+
+fn (f &Fn) find_var2(name string) Var {
 	for i in 0 .. f.var_idx {
 		if f.local_vars[i].name == name {
 			return f.local_vars[i]
@@ -73,8 +100,10 @@ fn (xP mut Parser) mark_var_changed(var Var) {
 }
 
 fn (f mut Fn) known_var(name string) bool {
-	var := f.find_var(name)
-	return var.name.len > 0
+	_ := f.find_var(name) or {
+		return false
+	}	
+	return true
 }
 
 fn (f mut Fn) register_var(var Var) {
@@ -103,7 +132,7 @@ fn (xP mut Parser) is_sig() bool {
 fn new_fn(mod string, is_public bool) Fn {
 	return Fn {
 		mod: mod
-		local_vars: [Var{}].repeat2(MaxLocalVars)
+		local_vars: [Var{}].repeat(MaxLocalVars)
 		is_public: is_public
 	}
 
@@ -209,11 +238,14 @@ fn (xP mut Parser) fn_decl() {
 	if !is_c && !xP.builtin_mod && xP.mod != 'main' && receiver_typ.len == 0 {
 		f.name = xP.prepend_mod(f.name)
 	}
-	if xP.first_cp() && xP.table.known_fn(f.name) && receiver_typ.len == 0 {
-		existing_fn := xP.table.find_fn(f.name)
+	if xP.first_cp() && receiver_typ.len == 0 {
+		for {
+		existing_fn := xP.table.find_fn(f.name) or { break }
 		// This existing function could be defined as C declaration before (no body), then we don't need to throw an error
 		if !existing_fn.is_decl {
 			xP.error('redefinition of `$f.name`')
+		}
+		break
 		}
 	}
 	// Generic?
@@ -336,7 +368,7 @@ fn (xP mut Parser) fn_decl() {
 			}
 			xP.table.register_type2(receiver_t)
 		}
-		xP.table.add_method(receiver_t.name, f)
+		xP.add_method(receiver_t.name, f)
 	}
 	else {
 		// println('register_fn typ=$typ isg=$is_generic')
@@ -508,7 +540,11 @@ fn (xP mut Parser) check_unused_variables() {
 		}
 		if !var.is_used && !xP.pref.is_repl && !var.is_arg && !xP.pref.translated && var.name != '_' {
 			xP.scanner.line_no_y = var.line_no_y - 1
-			xP.error('`$var.name` declared and not used')
+			if xP.pref.is_prod {
+				xP.error('`$var.name` declared and not used')
+			} else {
+				xP.warn('`$var.name` declared and not used')
+			}
 		}
 		if !var.is_changed && var.is_mutable && !xP.pref.is_repl && !var.is_arg && !xP.pref.translated && var.name != '_' {
 			xP.scanner.line_no_y = var.line_no_y - 1
@@ -818,9 +854,9 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 			}
 			xP.check(.key_mutable)
 			var_name := xP.lit
-			var := xP.cur_fn.find_var(var_name)
-			if var.name == '' {
+			var := xP.cur_fn.find_var(var_name) or {
 				xP.error('`$arg.name` is a mutable argument, you need to provide a variable to modify: `$f.name(... mut a...)`')
+				exit(1)
 			}
 			if !var.is_changed {
 				xP.mark_var_changed(var)

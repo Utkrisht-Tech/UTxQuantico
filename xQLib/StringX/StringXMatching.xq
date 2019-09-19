@@ -9,7 +9,7 @@ module StringX
 // Levenshtein Distance Algorithm:
 // To calculate the distance between two strings (lower is closer)
 public fn levenshtein_distance(a, b string) int {
-	mut f := [int(0)].repeat2(b.len+1)
+	mut f := [int(0)].repeat(b.len+1)
 	for ca in a {
 		mut j := 1
 		mut fj1 := f[0]

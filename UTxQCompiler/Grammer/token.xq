@@ -126,6 +126,7 @@ enum Token {
 	key_match
 	key_module
 	key_mutable
+	key_none
 	key_public
 	key_private
 	key_return
@@ -155,7 +156,7 @@ fn build_keys() map[string]int {
 
 // TODO remove once we have `enum Token { name('name') if('if') ... }`
 fn build_token_str() []string {
-	mut l := [''].repeat2(NoOfTokens)
+	mut l := [''].repeat(NoOfTokens)
 	l[Token.keywords_top] = ''
 	l[Token.keywords_bottom] = ''
 	l[Token.EOF] = '.EOF'
@@ -255,6 +256,7 @@ fn build_token_str() []string {
 	l[Token.key_match] = 'match'
 	l[Token.key_module] = 'module'
 	l[Token.key_mutable] = 'mut'
+	l[Token.key_none] = 'none'
 	l[Token.key_public] = 'public'
 	l[Token.key_private] = 'private'
 	l[Token.key_return] = 'return'

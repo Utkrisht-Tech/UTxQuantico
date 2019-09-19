@@ -118,13 +118,10 @@ typedef map map_string;
 #endif
 
 //============================== HELPER C MACROS =============================*/
-
 #define _PUSH(arr, val, tmp, tmp_typ) {tmp_typ tmp = (val); array__push(arr, &tmp);}
 #define _PUSH_MANY(arr, val, tmp, tmp_typ) {tmp_typ tmp = (val); array__push_many(arr, tmp.data, tmp.len);}
 #define _IN(typ, val, arr) array_##typ##_contains(arr, val)
 #define _IN_MAP(val, m) map__exists(m, val)
-//#define ALLOC_INIT(type, ...) (type *)memdup((type[]){ __VA_ARGS__ }, sizeof(type))
-
 //================================== GLOBALS =================================*/
 byteptr g_str_buf;
 int load_so(byteptr);
@@ -135,26 +132,26 @@ void init_consts();
 
 js_headers = '
 
-class array_string {}
-class array_byte {}
-class array_int {}
-class byte {}
-class double {}
-class int {}
-class f64 {}
-class f32 {}
-class i64 {}
-class i32 {}
-class i16 {}
-class u64 {}
-class u32 {}
-class u16 {}
-class i8 {}
-class u8 {}
-class bool {}
-class rune {}
-class map_string {}
-class map_int {}
+var array_string = function() {}
+var array_byte = function() {}
+var array_int = function() {}
+var byte = function() {}
+var double = function() {}
+var int = function() {}
+var f64 = function() {}
+var f32 = function() {}
+var i64 = function() {}
+var i32 = function() {}
+var i16 = function() {}
+var u64 = function() {}
+var u32 = function() {}
+var u16 = function() {}
+var i8 = function() {}
+var u8 = function() {}
+var bool = function() {}
+var rune = function() {}
+var map_string = function() {}
+var map_int = function() {}
 
 function init_consts() {
 
