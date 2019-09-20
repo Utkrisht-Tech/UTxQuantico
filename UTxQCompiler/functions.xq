@@ -195,6 +195,7 @@ fn (xP mut Parser) fn_decl() {
 			ref: is_amper
 			ptr: is_mutable
 			line_no_y: xP.scanner.line_no_y
+			scanner_pos_x: xP.scanner.get_scanner_pos()
 		}
 		f.args << receiver
 		f.register_var(receiver)
@@ -539,16 +540,10 @@ fn (xP mut Parser) check_unused_variables() {
 			break
 		}
 		if !var.is_used && !xP.pref.is_repl && !var.is_arg && !xP.pref.translated && var.name != '_' {
-			xP.scanner.line_no_y = var.line_no_y - 1
-			if xP.pref.is_prod {
-				xP.error('`$var.name` declared and not used')
-			} else {
-				xP.warn('`$var.name` declared and not used')
-			}
+			xP.production_error('`$var.name` declared and not used', var.scanner_pos_x )
 		}
-		if !var.is_changed && var.is_mutable && !xP.pref.is_repl && !var.is_arg && !xP.pref.translated && var.name != '_' {
-			xP.scanner.line_no_y = var.line_no_y - 1
-			xP.error('`$var.name` is declared as mutable, but it was never changed')
+		if !var.is_changed && var.is_mutable && !xP.pref.is_repl && !xP.pref.translated && var.name != '_' {
+			xP.error_with_position( '`$var.name` is declared as mutable, but it was never changed', var.scanner_pos_x )
 		}
 	}
 }
@@ -722,6 +717,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 				is_arg: true
 				// is_mutable: is_mutable
 				line_no_y: xP.scanner.line_no_y
+				scanner_pos_x: xP.scanner.get_scanner_pos()
 			}
 			// f.register_var(var)
 			f.args << var
@@ -764,7 +760,8 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 				is_arg: true
 				is_mutable: is_mutable
 				ptr: is_mutable
-				line_no_y: p.scanner.line_no_y
+				line_no_y: xP.scanner.line_no_y
+				scanner_pos_x: xP.scanner.get_scanner_pos()        
 			}
 			f.register_var(var)
 			f.args << var
@@ -1056,6 +1053,9 @@ fn (f &Fn) find_misspelled_local_var(name string, min_match f32) string {
 	mut closest := f32(0)
 	mut closest_var := ''
 	for var in f.local_vars {
+		if var.scope_level > f.scope_level {
+			continue
+		}
 		n := name.all_after('.')
 		if var.name == '' || (n.len - var.name.len > 2 || var.name.len - n.len > 2) { continue }
 		r := StringX.dice_coefficient(var.name, n)

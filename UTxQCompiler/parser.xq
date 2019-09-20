@@ -771,7 +771,25 @@ if xP.scanner.line_comment != '' {
 }
 
 fn (xP &Parser) warn(s string) {
-				println('warning: $xP.scanner.file_path:${xP.scanner.line_no_y+1}: $s')
+	println('warning: $xP.scanner.file_path:${xP.scanner.line_no_y+1}: $s')
+}
+
+fn (xP mut Parser) error_with_position(es string, spx ScannerPosX) {
+	xP.scanner.goto_scanner_position( spx )
+	xP.error( es )
+}
+
+fn (xP mut Parser) production_error(es string, spx ScannerPosX) {
+	if xP.pref.is_prod {
+		xP.scanner.goto_scanner_position( sp )
+		xP.error( es )
+	}else {
+		// On a warning, restore the scanner state after printing the warning:
+		curpos := xP.scanner.get_scanner_pos()
+		xP.scanner.goto_scanner_position( spx )
+		xP.warn(es)
+		xP.scanner.goto_scanner_position( curpos )
+	}
 }
 
 fn (xP mut Parser) error(s string) {
@@ -1296,6 +1314,7 @@ fn (xP mut Parser) var_decl() {
 		xP.fspace()
 	}
 	// println('var decl tk=${xP.strtk()} ismutable=$is_mutable')
+	var_scanner_pos_x := xP.scanner.get_scanner_pos()
 	name := xP.check_name()
 	xP.var_decl_name = name
 	// Don't allow declaring a variable with the same name. Even in a child scope
@@ -1314,6 +1333,8 @@ fn (xP mut Parser) var_decl() {
 		typ: typ
 		is_mutable: is_mutable
 		is_alloc: xP.is_alloc || typ.starts_with('array_')
+		scanner_pos_x: var_scanner_pos_x
+		line_no_y: var_scanner_pos_x.line_no_y
 	})
 	//if xP.is_alloc { println('REG VAR IS ALLOC $name') }
 	xP.var_decl_name = ''
@@ -3556,8 +3577,8 @@ fn (xP mut Parser) go_statement() {
 
 fn (xP mut Parser) register_var(var Var) {
 	if var.line_no_y == 0 {
-		//var.line_no_y = xP.scanner.line_no_y
-		xP.cur_fn.register_var({ var | line_no_y: xP.scanner.line_no_y })
+		scpos := xP.scanner.get_scanner_pos()
+		xP.cur_fn.register_var({ var | scanner_pos_x: scpos, line_no_y: scpos.line_no_y })
 	} else {
 		xP.cur_fn.register_var(var)
 	}

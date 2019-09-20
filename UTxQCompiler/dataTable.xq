@@ -71,7 +71,6 @@ mut:
 	ref             bool
 	parent_fn       string // Variables can only be defined in functions
 	mod             string // Module where this var is stored
-	line_no_y       int
 	access_mod      AccessMod
 	is_global       bool // Global (translated from C only)
 	is_used         bool
@@ -79,6 +78,8 @@ mut:
 	scope_level     int
 	is_c            bool // Remove once `typ` is `Type`, not string
 	moved           bool
+	scanner_pos     ScannerPosX // TODO: Use only scanner_pos_x, remove line_no_y
+	line_no_y       int
 }
 
 struct Type {
