@@ -401,7 +401,7 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 	os.rm(out_name_obj)
 }
 
-fn build_thirdparty_obj_file_with_msvc(path string) {
+fn build_thirdParty_obj_file_with_msvc(path string) {
 	msvc := find_msvc() or {
 		println('Could not find visual studio')
 		return
@@ -434,7 +434,7 @@ fn build_thirdparty_obj_file_with_msvc(path string) {
 
 	cmd := '""$msvc.full_cl_exe_path" /volatile:ms /Z7 $include_string /c $cfiles /Fo"$obj_path""'
 	//NB: the quotes above ARE balanced.
-	println('thirdparty cmd line: $cmd')
+	println('thirdParty cmd line: $cmd')
 	res := os.exec(cmd) or {
 		cerror(err)
 		return

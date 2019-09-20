@@ -10,8 +10,8 @@ import (
 )
 
 fn (xQ mut UTxQ) XCompiler() {
-	// build any thirdparty obj files
-	xQ.build_thirdparty_obj_files()
+	// build any thirdParty obj files
+	xQ.build_thirdParty_obj_files()
 	
 	// Just create a C/JavaScript file and exit
 	if xQ.out_name.ends_with('.c') || xQ.out_name.ends_with('.js') {
@@ -340,14 +340,14 @@ fn (c mut UTxQ) XCompiler_windows_cross() {
 }
 
 
-fn (c UTxQ) build_thirdparty_obj_files() {
+fn (c UTxQ) build_thirdParty_obj_files() {
 	for flag in c.get_os_cflags() {
 		if flag.value.ends_with('.o') {
 			if c.os == .msvc {
-				build_thirdparty_obj_file_with_msvc(flag.value)
+				build_thirdParty_obj_file_with_msvc(flag.value)
 			}
 			else {
-				build_thirdparty_obj_file(flag.value)
+				build_thirdParty_obj_file(flag.value)
 			}
 		}
 	}
@@ -369,7 +369,7 @@ fn find_c_compiler_default() string {
 	return 'cc'
 }
 
-fn find_c_compiler_thirdparty_options() string {
+fn find_c_compiler_thirdParty_options() string {
 	if '-m32' in os.args {
 		$if windows {
 			return '-m32'

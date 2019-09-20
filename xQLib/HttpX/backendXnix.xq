@@ -13,8 +13,8 @@ import StringX
 // (older) system openssl.
 #flag linux -I/usr/local/include/openssl -L/usr/local/lib
 
-#flag windows -I @XQROOT/thirdparty/openssl/include
-#flag darwin -I @XQROOT/thirdparty/openssl/include
+#flag windows -I @XQROOT/thirdParty/openssl/include
+#flag darwin -I @XQROOT/thirdParty/openssl/include
 #flag -l ssl -l crypto
 // MacPorts
 #flag darwin -L/opt/local/lib

@@ -4,7 +4,7 @@
 
 module HttpX
 
-#flag windows -I @XQROOT/thirdparty/vschannel
+#flag windows -I @XQROOT/thirdParty/vschannel
 #flag -l ws2_32
 #flag -l crypt32
  

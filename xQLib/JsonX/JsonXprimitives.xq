@@ -4,8 +4,8 @@
 
 module JsonX
 
-#flag -I @XQROOT/thirdparty/cJSON
-#flag @XQROOT/thirdparty/cJSON/cJSON.o
+#flag -I @XQROOT/thirdParty/cJSON
+#flag @XQROOT/thirdParty/cJSON/cJSON.o
 #include "cJSON.h"
 
 struct C.cJSON {
