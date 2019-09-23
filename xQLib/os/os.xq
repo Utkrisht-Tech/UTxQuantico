@@ -466,10 +466,10 @@ public fn get_line() string {
 public fn get_raw_line() string {
 	$if windows {
         maxlinechars := 256
-        buf := &u16(malloc(maxlinechars*2))
+        buf := &byte(malloc(maxlinechars*2))
         res := int( C.fgetws(buf, maxlinechars, C.stdin ) )
-        len := int(  C.wcslen(buf) )
-        if 0 != res { return string_from_wide2( buf, len ) }
+        len := int(  C.wcslen(&u16(buf)) )
+        if 0 != res { return string_from_wide2( &u16(buf), len ) }
         return ''
     }
 	$else {

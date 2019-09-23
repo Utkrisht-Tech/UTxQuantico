@@ -294,8 +294,7 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 		'oleaut32.lib',
 		'uuid.lib',
 		'odbc32.lib',
-		'odbccp32.lib',
-		'vcruntime.lib',
+		'odbccp32.lib'
 	]
 
 	mut inc_paths := []string{}
