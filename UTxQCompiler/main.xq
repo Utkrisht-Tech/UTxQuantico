@@ -70,7 +70,7 @@ mut:
 	out_name   string // "program.exe"
 	xQRoot      string
 	mod        string  // module being built with -lib
-	//parsers    []Parser
+	parsers    []Parser
 }
 
 struct Preferences {
@@ -203,6 +203,15 @@ fn main() {
 		//}
 		println('done!')
 	}
+}
+
+fn (xQ mut UTxQ) add_parser(parser Parser) {
+       for xP in xQ.parsers {
+               if xP.file_path == parser.file_path {
+                       return
+               }
+       }
+       xQ.parsers << parser
 }
 
 fn (xQ mut UTxQ) compile() {
@@ -362,6 +371,7 @@ _setmode(_fileno(stdin), mode);
 _setmode(_fileno(stdout), _O_U8TEXT);
 SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), ENABLE_PROCESSED_OUTPUT | 0x0004);
 // ENABLE_VIRTUAL_TERMINAL_PROCESSING
+setbuf(stdout,0);
 #endif
 g_str_buf=malloc(1000);
 $consts_init_body
@@ -418,8 +428,15 @@ string _STR_TMP(const char *fmt, ...) {
 				exit(1)
 			}
 		}
-		// Generate `main` which calls every single test function
 		else if xQ.pref.is_test {
+			if xQ.table.main_exists() {
+				cerror('Test files cannot have function `main`')
+			}	
+			// Make sure there's at least on test function
+			if !xQ.table.has_at_least_one_test_fn() {
+				cerror('Test files need to have at least one test function')
+			}	
+			// Generate `main` which calls every single test function
 			cgen.genln('int main() { init_consts();')
 			for _, f in xQ.table.fns {
 				if f.name.starts_with('test_') {
@@ -831,12 +848,7 @@ fn new_xQ(args[]string) &UTxQ {
 			files << f
 		}
 
-	mut cflags := ''
-	for ci, cv in args {
-		if cv == '-cflags' {
-			cflags += args[ci+1] + ' '
-		}
-	}
+	cflags := get_cmdline_cflags(args)
 
 	rdir := os.realpath( dir )
 	rdir_name := os.filename( rdir )

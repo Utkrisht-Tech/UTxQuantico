@@ -22,7 +22,7 @@ fn new_array(inpLen, cap, elem_size int) array {
 		len: inpLen
 		cap: cap
 		element_size: elem_size
-		data: calloc(cap * elem_size)
+		data: malloc(cap * elem_size)
 	}
 	return arr
 }
@@ -40,7 +40,7 @@ fn new_array_from_c_array(inpLen, cap, elem_size int, c_array voidptr) array {
 		len: inpLen
 		cap: cap
 		element_size: elem_size
-		data: malloc(cap * elem_size)
+		data: calloc(cap * elem_size)
 	}
 	// TODO Write all memory functions in UTxQ (like memcpy)
 	C.memcpy(arr.data, c_array, inpLen * elem_size)
@@ -64,7 +64,7 @@ fn array_repeat_old(val voidptr, no_of_repeats, elem_size int) array {
 		len: no_of_repeats
 		cap: no_of_repeats
 		element_size: elem_size
-		data: malloc(no_of_repeats * elem_size)
+		data: calloc(no_of_repeats * elem_size)
 	}
 	for i := 0; i < no_of_repeats; i++ {
 		C.memcpy(arr.data + i * elem_size, val, elem_size)
@@ -77,7 +77,7 @@ public fn (a array) repeat(no_of_repeats int) array {
 		len: no_of_repeats
 		cap: no_of_repeats
 		element_size: a.element_size
-		data: malloc(no_of_repeats * a.element_size)
+		data: calloc(no_of_repeats * a.element_size)
 	}
 	val := a.data + 0 //no_of_repeats * a.element_size
 	for i := 0; i < no_of_repeats; i++ {
@@ -180,7 +180,7 @@ fn (arr mut array) _push(val voidptr) {
 		cap := (arr.len + 1) * 2
 		// println('_push: realloc, new cap=$cap')
 		if arr.cap == 0 {
-			arr.data = malloc(cap * arr.element_size)
+			arr.data = calloc(cap * arr.element_size)
 		}
 		else {
 			arr.data = C.realloc(arr.data, cap * arr.element_size)
@@ -198,7 +198,7 @@ public fn (arr mut array) _push_many(val voidptr, size int) {
 		cap := (arr.len + size) * 2
 		// println('_push: realloc, new cap=$cap')
 		if arr.cap == 0 {
-			arr.data = malloc(cap * arr.element_size)
+			arr.data = calloc(cap * arr.element_size)
 		}
 		else {
 			arr.data = C.realloc(arr.data, cap * arr.element_size)
@@ -214,7 +214,7 @@ public fn (a array) reverse() array {
 		len: a.len
 		cap: a.cap
 		element_size: a.element_size
-		data: malloc(a.cap * a.element_size)
+		data: calloc(a.cap * a.element_size)
 	}
 	for i := 0; i < a.len; i++ {
 		C.memcpy(arr.data + i * arr.element_size, &a[a.len-1-i], arr.element_size)
@@ -227,7 +227,7 @@ public fn (a array) clone() array {
 		len: a.len
 		cap: a.cap
 		element_size: a.element_size
-		data: malloc(a.cap * a.element_size)
+		data: calloc(a.cap * a.element_size)
 	}
 	C.memcpy(arr.data, a.data, a.cap * a.element_size)
 	return arr

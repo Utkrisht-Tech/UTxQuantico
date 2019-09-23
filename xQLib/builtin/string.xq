@@ -158,9 +158,9 @@ public fn (s string) u64() u64 {
 }
 
 // ==
-fn (s string) eq(a string) bool {
+fn (s string) equal(a string) bool {
 	if isnull(s.str) { // This should never happen
-		panic('string.eq(): null string')
+		panic('string.equal(): Null string')
 	}
 	if s.len != a.len {
 		return false
@@ -174,8 +174,8 @@ fn (s string) eq(a string) bool {
 }
 
 // !=
-fn (s string) noteq(a string) bool {
-	return !s.eq(a)
+fn (s string) notequal(a string) bool {
+	return !s.equal(a)
 }
 
 // s < a
@@ -195,17 +195,17 @@ fn (s string) lessthan(a string) bool {
 }
 
 // s <= a
-fn (s string) lesseq(a string) bool {
-	return s.lessthan(a) || s.eq(a)
+fn (s string) lessthanequal(a string) bool {
+	return s.lessthan(a) || s.equal(a)
 }
 
 // s > a
 fn (s string) greaterthan(a string) bool {
-	return !s.lessthan(a)
+	return !s.lessthanequal(a)
 }
 
 // s >= a
-fn (s string) greatereq(a string) bool {
+fn (s string) greaterthanequal(a string) bool {
 	return !s.lessthan(a)
 }
 
@@ -461,7 +461,7 @@ public fn (s string) index_after(p string, start int) int {
 	return -1
 }
 
-// counts occurrences of substr in s
+// Counts occurrences of substr in s
 public fn (s string) count(suBStr string) int {
 	if s.len == 0 || suBStr.len == 0 {
 		return 0
@@ -724,22 +724,128 @@ public fn (s string) ustring_tmp() ustring {
 	return res
 }
 
+fn (u ustring) equal(a ustring) bool {
+	if u.len != a.len || u.s != a.s {
+		return false
+	}
+	return true
+}
+
+fn (u ustring) notequal(a ustring) bool {
+	return !u.equal(a)
+}
+
+fn (u ustring) lessthan(a ustring) bool {
+	return u.s < a.s
+}
+
+fn (u ustring) lessthanequal(a ustring) bool {
+	return u.lessthan(a) || u.equal(a)
+}
+
+fn (u ustring) greaterthan(a ustring) bool {
+	return !u.lessthanequal(a)
+}
+
+fn (u ustring) greaterthanequal(a ustring) bool {
+	return !u.lessthan(a)
+}
+
+fn (u ustring) add(a ustring) ustring {
+	mut res := ustring {
+		s: u.s + a.s
+		runes: new_array(0, u.s.len + a.s.len, sizeof(int))
+	}
+	mut j := 0
+	for i := 0; i < u.s.len; i++ {
+		char_len := utf8_char_len(u.s.str[i])
+		res.runes << j
+		i += char_len - 1
+		j += char_len
+		res.len++
+	}
+	for i := 0; i < a.s.len; i++ {
+		char_len := utf8_char_len(a.s.str[i])
+		res.runes << j
+		i += char_len - 1
+		j += char_len
+		res.len++
+	}
+	return res
+}
+
+public fn (u ustring) index_after(p ustring, start int) int {
+	if p.len > u.len {
+		return -1
+	}
+	mut strt := start
+	if start < 0 {
+		strt = 0
+	}
+	if start > u.len {
+		return -1
+	}
+	mut i := strt
+	for i < u.len {
+		mut j := 0
+		mut ii := i
+		for j < p.len && u.at(ii) == p.at(j) {
+			j++
+			ii++
+		}
+		if j == p.len {
+			return i
+		}
+		i++
+	}
+	return -1
+}
+
+// Counts occurrences of substr in s
+public fn (u ustring) count(substr ustring) int {
+	if u.len == 0 || substr.len == 0 {
+		return 0
+	}
+	if substr.len > u.len {
+		return 0
+	}
+	mut n := 0
+	mut i := 0
+	for {
+		i = u.index_after(substr, i)
+		if i == -1 {
+			return n
+		}
+		i += substr.len
+		n++
+	}
+	return 0 // TODO can never get here - UTxQ doesn't know that
+}
+
 public fn (u ustring) substr(start, end int) string {
-	Start := u.runes[start]
-	End := if end >= u.runes.len {
+	if start > end || start > u.len || end > u.len || start < 0 || end < 0 {
+		panic('substr($start, $end) out of bounds (len=$u.len)')
+	}
+	end := if _end >= u.len {
 		u.s.len
 	}
 	else {
 		u.runes[end]
 	}
-	return u.s.substr(Start, End)
+	return u.s.substr(u.runes[start], end)
 }
 
 public fn (u ustring) left(pos int) string {
+	if pos >= u.len {
+		return u.s
+	}
 	return u.substr(0, pos)
 }
 
 public fn (u ustring) right(pos int) string {
+	if pos >= u.len {
+		return ''
+	}
 	return u.substr(pos, u.len)
 }
 
@@ -751,6 +857,9 @@ fn (s string) at(idx int) byte {
 }
 
 public fn (u ustring) at(idx int) string {
+	if idx < 0 || idx >= u.len {
+		panic('string index out of range: $idx / $u.runes.len')
+	}
 	return u.substr(idx, idx + 1)
 }
 

@@ -49,7 +49,7 @@ fn find_windows_kit_internal(key RegKey, versions []string) ?string {
 			alloc_length := (required_bytes + 2)
 
 			mut value := &u16(malloc(alloc_length))
-			if !value {
+			if isnull(value) {
 				continue
 			}
 

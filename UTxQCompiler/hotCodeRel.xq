@@ -39,13 +39,13 @@ fn (xQ &UTxQ) generate_declarations_for_hotcode_reloading() {
 	}
 }
 
-fn (xQ mut UTxQ) generate_code_for_hot_reloading() {
+fn (xQ &UTxQ) generate_code_for_hot_reloading() {
 	mut cgen := xQ.cgen
 	
 	// Hot code reloading
 	if xQ.pref.is_live {
-		file := xQ.dir
-		file_base := xQ.dir.replace('.xq', '')
+		mut file := os.realpath(xQ.dir)
+		mut file_base := os.filename(file).replace('.xq', '')
 		so_name := file_base + '.so'
 		// Need to build .so file before building the live application
 		// The live app needs to load this .so file on initialization.
@@ -53,6 +53,7 @@ fn (xQ mut UTxQ) generate_code_for_hot_reloading() {
 
 		if os.user_os() == 'windows' {
 			xQExe = xQExe.replace('\\', '\\\\')
+			file = file.replace('\\', '\\\\')
 		}
 
 		mut msvc := ''

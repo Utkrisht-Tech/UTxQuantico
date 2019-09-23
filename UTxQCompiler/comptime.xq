@@ -89,12 +89,18 @@ fn (xP mut Parser) comp_time() {
 	// Compile WebX html template to UTxQ code, parse that UTxQ code and embed the resulting UTxQ functions
 	// that returns an html string
 	else if xP.tk == .NAME && xP.lit == 'WebX' {
-		path := xP.cur_fn.name + '.html'
+		mut path := xP.cur_fn.name + '.html'
 		if xP.pref.is_debug {
 			println('Compiling template $path')
 		}
 		if !os.file_exists(path) {
-			xP.error('WebX HTML template "$path" not found')
+			// Can't find the template file in current directory,
+			// try looking next to the WebX program, in case it's run with
+			// xQ path/to/WebX_app.xq
+			path = os.dir(xP.scanner.file_path) + '/' + path
+			if !os.file_exists(path) {
+				xP.error('WebX HTML template "$path" not found')
+			}
 		}
 		xP.check(.NAME)  // TODO skip `WebX.html()`
 		xP.check(.DOT)

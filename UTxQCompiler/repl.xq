@@ -145,7 +145,7 @@ fn run_repl() []string {
 				cerror(err)
 				return []string
 			}
-			if !fn_call && !q.exit_code {
+			if !fn_call && q.exit_code == 0 {
 				for R.temp_lines.len > 0 {
 					if !R.temp_lines[0].starts_with('print') {
 						R.lines << R.temp_lines[0]

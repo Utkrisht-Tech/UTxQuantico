@@ -465,6 +465,10 @@ fn (xP mut Parser) gen_array_push(sh int, typ, expr_type, tmp, tmp_typ string) {
 		// Don't dereference if it's already a mutable array argument  (`fn foo(mut []int)`)
 		push_call := if typ.contains('*'){'_PUSH('} else { '_PUSH(&'}
 		xP.cgen.set_shadow(sh, push_call)
-		xP.gen('), $tmp, $tmp_typ)')
+		if tmp_typ.ends_with('*') {
+			xP.gen('), $tmp, ${tmp_typ.left(tmp_typ.len - 1)})')
+		} else {
+			xP.gen('), $tmp, $tmp_typ)')
+		}
 	}
 }

@@ -4,8 +4,15 @@
 
 module main
 
-import os
-import StringX
+import (
+	os
+	StringX
+)
+
+const (
+	single_quote = `\'`
+	double_quote = `"`
+)
 
 struct Scanner {
 mut:
@@ -14,8 +21,8 @@ mut:
 	pos_x                   int         // x - coordinate of Scanner
 	line_no_y               int         // y - coordinate of Scanner
 	is_in_string            bool
-	dollar_start            bool // for hacky string interpolation TODO simplify
-	dollar_end              bool
+	interpol_start          bool // for hacky string interpolation TODO simplify
+	interpol_end            bool
 	is_debug                bool
 	line_comment            string
 	mline_comment           string
@@ -27,6 +34,7 @@ mut:
 	prev_tk                 Token
 	fn_name 				string // needed for @FN
 	should_print_line_on_error bool
+	str_denoter				byte 	// Quote used to denote current string: ' or "
 }
 
 fn new_scanner(file_path string) &Scanner {
@@ -73,10 +81,10 @@ fn (sc ScannerPosX) str() string {
 	return 'ScannerPosX{ ${sc.pos_x:5d} , ${sc.line_no_y:5d} }'
 }
 fn (sc &Scanner) get_scanner_pos() ScannerPosX {
-	return ScannerPosX{ pos_x: sc.pos_x line_no_y: sc.line_no_y } 
+	return ScannerPosX{ pos_x: sc.pos_x line_no_y: sc.line_no_y }
 }
 fn (sc mut Scanner) goto_scanner_position(scp ScannerPosX) {
-	sc.pos_x = scp.pos_x 
+	sc.pos_x = scp.pos_x
 	sc.line_no_y = scp.line_no_y
 }
 
@@ -263,12 +271,12 @@ fn (sc mut Scanner) scan() ScanRes {
 		sc.skip_whitespace()
 	}
 	// End of $var, start next string
-	if sc.dollar_end {
+	if sc.interpol_end {
 		if sc.text[sc.pos_x] == `\'` {
-			sc.dollar_end = false
+			sc.interpol_end = false
 			return scan_res(.STRING, '')
 		}
-		sc.dollar_end = false
+		sc.interpol_end = false
 		return scan_res(.STRING, sc.identify_string())
 	}
 	sc.skip_whitespace()
@@ -295,14 +303,14 @@ fn (sc mut Scanner) scan() ScanRes {
 		// at the next ', skip it
 		if sc.is_in_string {
 			if next_char == `\'` {
-				sc.dollar_end = true
-				sc.dollar_start = false
+				sc.interpol_end = true
+				sc.interpol_start = false
 				sc.inside_string = false
 			}
 		}
-		if sc.dollar_start && next_char != `.` {
-			sc.dollar_end = true
-			sc.dollar_start = false
+		if sc.interpol_start && next_char != `.` {
+			sc.interpol_end = true
+			sc.interpol_start = false
 		}
 		if sc.pos_x == 0 && next_char == ` ` {
 			sc.pos_x++
@@ -482,11 +490,8 @@ fn (sc mut Scanner) scan() ScanRes {
       }
       return scan_res(.NAME, name)
     }
-	case `\'`:
+	case single_quote, double_quote:
 		return scan_res(.STRING, sc.identify_string())
-		// TODO allow double quotes
-		// case `""`:
-		// return scan_res(.STRING, sc.ident_string())
 	case `\``: // ` // apostrophe balance comment. do not remove
 		return scan_res(.CHAR, sc.identify_char())
 	case `\r`:
@@ -708,8 +713,14 @@ fn (sc Scanner) count_symbol_before(p int, sym byte) int {
 // println('array out of bounds $idx len=$a.len')
 // This is really bad. It needs a major clean up
 fn (sc mut Scanner) identify_string() string {
-	// println("\nidentifyString() at char=", string(sc.text[sc.pos_x]),
-	// "chard=", sc.text[sc.pos_x], " pos=", sc.pos_x, "txt=", sc.text[sc.pos_x:sc.pos_x+7])
+	q := s.text[sc.pos_x]
+	if (q == single_quote || q == double_quote) &&	!sc.inside_string{
+		sc.str_denoter = q
+	}
+	//if s.file_path.contains('stringXtest') {
+	//println('\nidentify_string() at char=${sc.text[sc.pos_x].str()}')
+	//println('lineno=$sc.line_no_y str_denoter=  $qquote ${qquote.str()}')
+	//}
 	mut start_pos := sc.pos_x
 	sc.is_in_string = false
 	dslash := `\\`
@@ -721,7 +732,7 @@ fn (sc mut Scanner) identify_string() string {
 		ch := sc.text[sc.pos_x]
 		prevch := sc.text[sc.pos_x - 1]
 		// end of string
-		if ch == `\'` && (prevch != dslash || (prevch == dslash && sc.text[sc.pos_x - 2] == dslash)) {
+		if ch == sc.str_denoter && (prevch != dslash || (prevch == dslash && sc.text[sc.pos_x - 2] == dslash)) {
 			// handle '123\\'  slash at the end
 			break
 		}
@@ -746,13 +757,13 @@ fn (sc mut Scanner) identify_string() string {
 		// $var
 		if (ch.is_letter() || ch == `_`) && prevch == `$` && sc.count_symbol_before(sc.pos_x-2, `\\`) % 2 == 0 {
 			sc.is_in_string = true
-			sc.dollar_start = true
+			sc.interpol_start = true
 			sc.pos_x -= 2
 			break
 		}
 	}
 	mut literal := ''
-	if sc.text[start_pos] == `\'` {
+	if sc.text[start_pos] == sc.str_denoter {
 		start_pos++
 	}
 	mut end_pos := sc.pos_x
@@ -807,8 +818,8 @@ fn (sc mut Scanner) peek() Token {
 	pos := sc.pos_x
 	line := sc.line_no_y
 	is_in_string := sc.is_in_string
-	dollar_start := sc.dollar_start
-	dollar_end := sc.dollar_end
+	interpol_start := sc.interpol_start
+	interpol_end := sc.interpol_end
 
 	res := sc.scan()
 	tk := res.tk
@@ -817,8 +828,8 @@ fn (sc mut Scanner) peek() Token {
 	sc.pos_x = pos
 	sc.line_no_y = line
 	sc.is_in_string = is_in_string
-	sc.dollar_start = dollar_start
-	sc.dollar_end = dollar_end
+	sc.interpol_start = interpol_start
+	sc.interpol_end = interpol_end
 	return tk
 }
 

@@ -4,7 +4,10 @@
 
 module main
 
-import StringX
+import (
+	os
+	StringX
+)
 
 const (
 	MaxLocalVars = 50
@@ -455,7 +458,7 @@ fn (xP mut Parser) fn_decl() {
 		}
 		// We are in live code reload mode, call the .so loader in background
 		if xP.pref.is_live {
-			file_base := xP.file_path.replace('.xq', '')
+			file_base := os.filename(xP.file_path).replace('.xq', '')
 			if xP.os != .windows && xP.os != .msvc {
 				so_name := file_base + '.so'
 				xP.genln('
@@ -865,7 +868,13 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 		// function calls.
 		// `println(777)` => `printf("%d\n", 777)`
 		// (If we don't check for void, then UTxQ will compile `println(func())`)
-		if i == 0 && (f.name == 'println' || f.name == 'print')  && typ != 'string' && typ != 'void' {
+		if i == 0 && (f.name == 'println' || f.name == 'print') && typ == 'ustring' {
+			if typ == 'ustring' {
+				xP.gen('.s')
+			}
+			typ = 'string'
+		}
+		if i == 0 && (f.name == 'println' || f.name == 'print')  && typ != 'string' && typ != 'ustring' && typ != 'void' {
 			T := xP.table.find_type(typ)
 			$if !windows {
 			$if !js {

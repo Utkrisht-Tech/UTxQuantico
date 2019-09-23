@@ -220,7 +220,7 @@ public fn reverse64(x u64) u64 {
 //
 // This function's execution time does not depend on the inputs.
 [inline]
-fn reverse_bytes16(x u16) u16 {
+public fn reverse_bytes16(x u16) u16 {
 	return u16(x>>u16(8)) | u16(x<<u16(8))
 }
 
@@ -228,7 +228,7 @@ fn reverse_bytes16(x u16) u16 {
 //
 // This function's execution time does not depend on the inputs.
 [inline]
-fn reverse_bytes32(x u32) u32 {
+public fn reverse_bytes32(x u32) u32 {
 	m := u64(u64(1<<32) - u64(1))
 	y := u32(u32(x>>u32(8)&u32(m3&m)) | u32(u32(x&u32(m3&m))<<u32(8)))
 	return u32(y>>u32(16)) | u32(y<<u32(16))
@@ -238,7 +238,7 @@ fn reverse_bytes32(x u32) u32 {
 //
 // This function's execution time does not depend on the inputs.
 [inline]
-fn reverse_bytes64(x u64) u64 {
+public fn reverse_bytes64(x u64) u64 {
 	m := u64(u64(1<<64) - u64(1))
 	mut y := u64(u64(x>>u64(8)&(m3&m)) | u64(u64(x&(m3&m))<<u64(8)))
 	y = u64(u64(y>>u64(16)&(m4&m)) | u64(u64(y&(m4&m))<<u64(16)))
@@ -248,12 +248,12 @@ fn reverse_bytes64(x u64) u64 {
 // --- Len ---
 
 // len8: Returns the minimum number of bits required to represent x; the result is 0 for x == 0.
-fn len8(x byte) int {
+public fn len8(x byte) int {
 	return int(len8_tab[x])
 }
 
 // len16: Returns the minimum number of bits required to represent x; the result is 0 for x == 0.
-fn len16(x u16) int {
+public fn len16(x u16) int {
 	mut y := x
 	mut n := 0
 	if y >= u16(u16(1)<<u16(8)) {
@@ -264,7 +264,7 @@ fn len16(x u16) int {
 }
 
 // len32: Returns the minimum number of bits required to represent x; the result is 0 for x == 0.
-fn len32(x u32) int {
+public fn len32(x u32) int {
 	mut y := x
 	mut n := 0
 	if y >= u32(u32(1)<<u32(16)) {
@@ -279,7 +279,7 @@ fn len32(x u32) int {
 }
 
 // len64: Returns the minimum number of bits required to represent x; the result is 0 for x == 0.
-fn len64(x u64) int {
+public fn len64(x u64) int {
 	mut y := x
 	mut n := 0
 	if y >= u64(u64(1)<<u64(32)) {

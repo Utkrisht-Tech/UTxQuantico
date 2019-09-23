@@ -1257,6 +1257,7 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 		xP.mark_var_changed(val)
 	}
 	is_str := val.typ == 'string'
+	is_ustr := val.typ == 'ustring'
 	switch tk {
 	case Token.ASSIGN:
 		if !is_map && !xP.is_empty_c_struct_init {
@@ -1265,6 +1266,9 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 	case Token.PLUS_ASSIGN:
 		if is_str && !xP.is_js  {
 			xP.gen('= string_add($val.name, ')// TODO can't do `foo.bar += '!'`
+		}
+		else if is_ustr {
+			xP.gen('= ustring_add($val.name, ')
 		}
 		else {
 			xP.gen(' += ')
@@ -1291,7 +1295,7 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 		xP.scanner.line_no_y--
 		xP.error('cannot use type `$expr_type` as type `$xP.assigned_type` in assignment')
 	}
-	if is_str && tk == .PLUS_ASSIGN && !xP.is_js {
+	if (is_str || is_ustr) && tk == .PLUS_ASSIGN && !xP.is_js {
 		xP.gen(')')
 	}
 	// xP.assigned_var = ''
@@ -1386,11 +1390,12 @@ fn (xP mut Parser) bterm() string {
 	mut typ := xP.expression()
 	xP.expected_type = typ
 	is_str := typ=='string'  &&   !xP.is_SqlX
+	is_ustr := typ=='ustring'
 	tk := xP.tk
 	// if tk in [ .EQEQUAL, .GREATER, .LESSER, .LESSEQUAL, .GREATEREQUAL, .NOTEQUAL] {
 	if tk == .EQEQUAL || tk == .NOTEQUAL || tk == .GREATEREQUAL || tk == .LESSEQUAL || tk == .GREATER || tk == .LESSER {
 		xP.fgen(' ${xP.tk.str()} ')
-		if is_str && !xP.is_js {
+		if (is_str || is_ustr) && !xP.is_js {
 			xP.gen(',')
 		}
 		else if xP.is_SqlX && tk == .EQEQUAL {
@@ -1432,6 +1437,17 @@ fn (xP mut Parser) bterm() string {
 			 Token.GREATER => xP.cgen.set_shadow(sh, 'string_greater(')
 			 Token.LESSER => xP.cgen.set_shadow(sh, 'string_lesser(')
 */
+		}
+		if is_ustr {
+			xP.gen(')')
+			switch tk {
+			case Token.EQEQUAL: xP.cgen.set_shadow(sh, 'ustring_eqeq(')
+			case Token.NOTEQUAL: xP.cgen.set_shadow(sh, 'ustring_noteq(')
+			case Token.GREATEREQUAL: xP.cgen.set_shadow(sh, 'ustring_greatereq(')
+			case Token.LESSEQUAL: xP.cgen.set_shadow(sh, 'ustring_lesseq(')
+			case Token.GREATER: xP.cgen.set_shadow(sh, 'ustring_greater(')
+			case Token.LESSER: xP.cgen.set_shadow(sh, 'ustring_lesser(')
+			}
 		}
 	}
 	return typ
@@ -2050,15 +2066,54 @@ struct IndexCfg {
 
 }
 
-// returns resulting type
+// in and dot have higher priority than `!`
+fn (xP mut Parser) indot_expr() string {
+	sh := xP.cgen.add_shadow()
+	mut typ := xP.term()
+	if xP.tk == .DOT  {
+		for xP.tk == .DOT {
+			typ = xP.DOT(typ, sh)
+		}
+	}
+	// `a in [1, 2, 3]`
+	// `key in map`
+	if xP.tk == .key_in {
+		xP.fgen(' ')
+		xP.check(.key_in)
+		xP.fgen(' ')
+		xP.gen('), ')
+		arr_typ := xP.expression()
+		is_map := arr_typ.starts_with('map_')
+		if !arr_typ.starts_with('array_') && !is_map {
+			xP.error('`in` requires an array/map')
+		}
+		T := xP.table.find_type(arr_typ)
+		if !is_map && !T.has_method('contains') {
+			xP.error('$arr_typ has no method `contains`')
+		}
+		// `typ` is element's type
+		if is_map {
+			xP.cgen.set_shadow(sh, '_IN_MAP( (')
+		}
+		else {
+			xP.cgen.set_shadow(sh, '_IN($typ, (')
+		}
+		xP.gen(')')
+		return 'bool'
+	}
+	return typ
+}
+
+// Returns resulting type
 fn (xP mut Parser) expression() string {
 	if xP.scanner.file_path.contains('test_test') {
 		println('expression() cp=$xP.cp tk=')
 		xP.print_tk()
 	}
 	sh := xP.cgen.add_shadow()
-	mut typ := xP.term()
+	mut typ := xP.indot_expr()
 	is_str := typ=='string'
+	is_ustr := typ=='ustring'
 	// `a << b` ==> `array_push(&a, b)`
 	if xP.tk == .LEFT_SHIFT {
 		if typ.contains('array_') {
@@ -2089,42 +2144,11 @@ fn (xP mut Parser) expression() string {
 			return 'int'
 		}
 	}
-	// `a in [1, 2, 3]`
-	// `key in map`
-	if xP.tk == .key_in {
-		xP.fgen(' ')
-		xP.check(.key_in)
-		xP.fgen(' ')
-		xP.gen('), ')
-		arr_typ := xP.expression()
-		is_map := arr_typ.starts_with('map_')
-		if !arr_typ.starts_with('array_') && !is_map {
-			xP.error('`in` requires an array/map')
-		}
-		T := xP.table.find_type(arr_typ)
-		if !is_map && !T.has_method('contains') {
-			xP.error('$arr_typ has no method `contains`')
-		}
-		// `typ` is element's type
-		if is_map {
-			xP.cgen.set_shadow(sh, '_IN_MAP( (')
-		}
-		else {
-			xP.cgen.set_shadow(sh, '_IN($typ, (')
-		}
-		xP.gen(')')
-		return 'bool'
-	}
 	if xP.tk == .RIGHT_SHIFT {
 		xP.next()
 		xP.gen(' >> ')
 		xP.check_types(xP.expression(), typ)
 		return 'int'
-	}
-	if xP.tk == .DOT  {
-		for xP.tk == .DOT {
-			typ = xP.dot(typ, sh)
-		}
 	}
 	// + - | ^
 	for xP.tk == .PLUS || xP.tk == .MINUS || xP.tk == .PIPE || xP.tk == .AMPER || xP.tk == .XOR {
@@ -2137,6 +2161,10 @@ fn (xP mut Parser) expression() string {
 		xP.check_space(xP.tk)
 		if is_str && tk_op == .PLUS && !xP.is_js {
 			xP.cgen.set_shadow(sh, 'string_add(')
+			xP.gen(',')
+		}
+		else if is_ustr && tk_op == .PLUS {
+			xP.cgen.set_shadow(sh, 'ustring_add(')
 			xP.gen(',')
 		}
 		// 3 + 4
@@ -2158,11 +2186,11 @@ fn (xP mut Parser) expression() string {
 			}
 		}
 		xP.check_types(xP.term(), typ)
-		if is_str && tk_op == .PLUS && !xP.is_js {
+		if (is_str || is_ustr) && tk_op == .PLUS && !xP.is_js {
 			xP.gen(')')
 		}
 		// Make sure operators are used with correct types
-		if !xP.pref.translated && !is_str && !is_num {
+		if !xP.pref.translated && !is_str && !is_ustr && !is_num {
 			T := xP.table.find_type(typ)
 			if tk_op == .PLUS {
 				if T.has_method('+') {
@@ -2226,8 +2254,11 @@ fn (xP mut Parser) unary() string {
 	case Token.NOT:
 		xP.gen('!')
 		xP.check(.NOT)
-		typ = 'bool'
-		xP.bool_expression()
+		// typ should be bool type
+		typ = xP.indot_expr()
+		if typ != 'bool' {
+			xP.error('! operator requires bool type, not `$typ`')
+		}
 	case Token.BIT_NOT:
 		xP.gen('~')
 		xP.check(.BIT_NOT)
@@ -2606,7 +2637,7 @@ fn (xP mut Parser) map_init() string {
 				xP.check(.COMMA)
 			}
 		}
-		xP.gen('new_map_init($i, sizeof($val_type), ' +	'(string[]){ $keys_gen }, ($val_type []){ $vals_gen } )')
+		xP.gen('new_map_init($i, sizeof($val_type), ' +	'(string[$i]){ $keys_gen }, ($val_type [$i]){ $vals_gen } )')
 		typ := 'map_$val_type'
 		xP.register_map(typ)
 		return typ

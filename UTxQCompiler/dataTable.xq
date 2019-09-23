@@ -670,6 +670,15 @@ fn (t &dataTable) main_exists() bool {
 	return false
 }
 
+fn (t &dataTable) has_at_least_one_test_fn() bool {
+	for _, f in t.fns {
+		if f.name.starts_with('testX') {
+			return true
+		}	
+	}
+	return false
+}
+
 fn (t &dataTable) find_const(name string) ?Var {
 	for c in t.consts {
 		if c.name == name {

@@ -49,7 +49,7 @@ fn testXlessthan() {
 	assert e < (f)
 }
 
-fn testXgreatereq() {
+fn testXgreaterthanequal() {
 	a := 'aa'
 	b := 'aa'
 	c := 'ab'
@@ -58,7 +58,7 @@ fn testXgreatereq() {
 	assert b >= (a)
 	assert c >= (b)
 	assert d >= (c)
-	assert !(c >= d) 
+	assert !(c >= d)
 	assert e >= (a)
 }
 
@@ -394,7 +394,7 @@ fn testXtitle() {
 	s.to_upper()
 	assert s.title() == 'Hello World'
 	s.to_lower()
-	assert s.title() == 'Hello World' 
+	assert s.title() == 'Hello World'
 } 
 
 fn testXfor_loop() {
@@ -417,5 +417,41 @@ fn testXfor_loop_two() {
 
 fn testXquote() {
 	a := `'`
+	println("Testing double quotes")
+	b := "hi"
+	assert b == 'hi'
 	assert a.str() == '\''
+}
+
+fn testXustring_comparisons() {
+	assert ('h€llô !'.ustring() == 'h€llô !'.ustring()) == true
+	assert ('h€llô !'.ustring() == 'h€llô'.ustring()) == false
+	assert ('h€llô !'.ustring() == 'h€llo !'.ustring()) == false
+
+	assert ('h€llô !'.ustring() != 'h€llô !'.ustring()) == false
+	assert ('h€llô !'.ustring() != 'h€llô'.ustring()) == true
+
+	assert ('h€llô'.ustring() < 'h€llô!'.ustring()) == true
+	assert ('h€llô'.ustring() < 'h€llo'.ustring()) == false
+	assert ('h€llo'.ustring() < 'h€llô'.ustring()) == true
+
+	assert ('h€llô'.ustring() <= 'h€llô!'.ustring()) == true
+	assert ('h€llô'.ustring() <= 'h€llô'.ustring()) == true
+	assert ('h€llô!'.ustring() <= 'h€llô'.ustring()) == false
+
+	assert ('h€llô!'.ustring() > 'h€llô'.ustring()) == true
+	assert ('h€llô'.ustring() > 'h€llô'.ustring()) == false
+
+	assert ('h€llô!'.ustring() >= 'h€llô'.ustring()) == true
+	assert ('h€llô'.ustring() >= 'h€llô'.ustring()) == true
+	assert ('h€llô'.ustring() >= 'h€llô!'.ustring()) == false
+}
+
+fn testXustring_count() {
+	a := 'h€llôﷰ h€llô ﷰ'.ustring()
+	assert (a.count('l'.ustring())) == 4
+	assert (a.count('€'.ustring())) == 2
+	assert (a.count('h€llô'.ustring())) == 2
+	assert (a.count('ﷰ'.ustring())) == 2
+	assert (a.count('a'.ustring())) == 0
 }

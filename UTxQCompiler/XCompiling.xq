@@ -370,20 +370,23 @@ fn find_c_compiler_default() string {
 }
 
 fn find_c_compiler_thirdParty_options() string {
-	if '-m32' in os.args {
-		$if windows {
-			return '-m32'
-		}
-		$else {
-			return '-fPIC -m32'
+	fullargs := env_xQFlags_and_os_args()
+	mut cflags := get_cmdline_cflags( fullargs )
+	$if !windows {
+		cflags += ' -fPIC'
+	}
+	if '-m32' in fullargs {
+		cflags += ' -m32'
+	}
+	return cflags
+}
+
+fn get_cmdline_cflags(args []string) string {
+	mut cflags := ''
+	for ci, cxQ in args {
+		if cxQ == '-cflags' {
+			cflags += args[ci+1] + ' '
 		}
 	}
-	else {
-		$if windows {
-			return ''
-		}
-		$else {
-			return '-fPIC'
-		}
-	}
+	return cflags
 }
