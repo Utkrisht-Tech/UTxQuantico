@@ -767,7 +767,8 @@ public fn file_last_mod_unix(path string) int {
 }
 
 
-fn log(s string) {
+public fn log(s string) {
+	println('os.log: ' + s)
 }
 
 public fn flush_stdout() {

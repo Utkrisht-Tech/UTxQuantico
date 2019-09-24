@@ -54,6 +54,7 @@ enum TypeCategory {
 	union    // 5
 	c_struct
 	c_typedef
+	objc_interface // 8 Objective-C @interface
 	array
 }
 
@@ -79,7 +80,7 @@ mut:
 	scope_level     int
 	is_c            bool // Remove once `typ` is `Type`, not string
 	moved           bool
-	scanner_pos     ScannerPosX // TODO: Use only scanner_pos_x, remove line_no_y
+	scanner_pos     ScannerPosX // TODO: Use only scanner_pos, remove line_no_y
 	line_no_y       int
 }
 
@@ -604,6 +605,10 @@ fn (xP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
 	// if expected == 'T' || expected.contains('<T>') {
 	// return true
 	// }
+	// TODO fn hack
+	if got.starts_with('fn ') && (expected.ends_with('fn') || expected.ends_with('Fn')) {
+		return true
+	}
 	// Allow pointer arithmetic
 	if expected=='void*' && got=='int' {
 		return true
@@ -831,12 +836,10 @@ fn (table &dataTable) get_file_import_table(file_path string) ParsedImportsTable
 	// 	return table.file_imports[file_path.clone()]
 	// }
 	// Just get imports. memory error when recycling import table
-	mut imports := map[string]string
+	mut pit := new_parsed_imports_table(file_path)
 	if file_path in table.file_imports {
-		imports = table.file_imports[file_path].imports
+		pit.imports = table.file_imports[file_path].imports
 	}
-	mut pit := new_parsed_imports_table(file_path.clone())
-	pit.imports = imports
 	return pit
 }
 

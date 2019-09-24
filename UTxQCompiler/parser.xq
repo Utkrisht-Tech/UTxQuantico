@@ -276,9 +276,9 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 			if xP.is_script && !xP.pref.is_test {
 				xP.set_current_fn( MainFn )
 				xP.check_unused_variables()
-				if !xP.first_cp() && !xP.pref.is_repl {
-					xP.check_unused_imports()
-				}
+			}
+			if !xP.first_cp() && !xP.pref.is_repl {
+				xP.check_unused_imports()
 			}
 			if false && !xP.first_cp() && xP.fileis('main.xq') {
 				out := os.create('/var/tmp/fmt.xq') or {
@@ -492,14 +492,17 @@ fn key_to_type_cat(tk Token) TypeCategory {
 // also unions and interfaces
 fn (xP mut Parser) struct_decl() {
 	// UTxQ can generate Objective C for integration with Cocoa
-	// `[interface:ParentInterface]`
-	//is_objc := xP.attr.starts_with('interface')
-	//objc_parent := if is_objc { xP.attr.right(10) } else { '' }
+	// `[objc_interface:ParentInterface]`
+	is_objc := xP.attr.starts_with('objc_interface')
+	objc_parent := if is_objc { xP.attr.right(15) } else { '' }
 	// interface, union, struct
 	is_interface := xP.tk == .key_interface
 	is_union := xP.tk == .key_union
 	is_struct := xP.tk == .key_struct
 	mut cat := key_to_type_cat(xP.tk)
+	if is_objc {
+		cat = .objc_interface
+	}
 	xP.fgen(xP.tk.str() + ' ')
 	// Get type name
 	xP.next()
@@ -529,7 +532,11 @@ fn (xP mut Parser) struct_decl() {
 	if xP.cp == .decl && xP.table.known_type(name) {
 		xP.error('`$name` redeclared')
 	}
-	if !is_c {
+	if is_objc {
+		// Forward declaration of an Objective-C interface with `@class` :)
+		xP.gen_typedef('@class $name;')
+	}	
+	else if !is_c {
 		kind := if is_union {'union'} else {'struct'}
 		xP.gen_typedef('typedef $kind $name $name;')
 	}
@@ -544,6 +551,7 @@ fn (xP mut Parser) struct_decl() {
 		typ.is_c = is_c
 		typ.is_shadow = false
 		typ.cat = cat
+		typ.parent = objc_parent
 		xP.table.rewrite_type(typ)
 	}
 	else {
@@ -552,6 +560,7 @@ fn (xP mut Parser) struct_decl() {
 			mod: xP.mod
 			is_c: is_c
 			cat: cat
+			parent: objc_parent
 		}
 	}
 	// Struct `C.Foo` declaration, no body
@@ -1705,12 +1714,6 @@ fn (xP mut Parser) name_expr() string {
 				xP.error('undefined: `$name`')
 			}
 			else {
-				if orig_name == 'i32' {
-					println('`i32` alias was removed, use `int` instead')
-				}
-				if orig_name == 'u8' {
-					println('`u8` alias was removed, use `byte` instead')
-				}
 				xP.error('undefined: `$orig_name`')
 				}
 			}
@@ -2834,42 +2837,11 @@ fn (xP mut Parser) array_init() string {
 }
 
 fn (xP mut Parser) struct_init(typ string) string {
-	//xP.gen('/* struct init */')
 	xP.is_struct_init = true
 	t := xP.table.find_type(typ)
 	if xP.gen_struct_init(typ, t) { return typ }
 	xP.scanner.format_out.cut(typ.len)
 	ptr := typ.contains('*')
-	/*
-	if !ptr {
-		if xP.is_c_struct_init {
-			// `face := C.FT_Face{}` => `FT_Face face;`
-			if xP.tk == .RCBR {
-				xP.is_empty_c_struct_init = true
-				xP.check(.RCBR)
-				return typ
-			}
-			xP.gen('(struct $typ) {')
-			xP.is_c_struct_init = false
-		}
-		else {
-			xP.gen('($typ /*str init */) {')
-		}
-	}
-	else {
-		// TODO tmp hack for 0 pointers init
-		// &User{!} ==> 0
-		if xP.tk == .NOT {
-			xP.next()
-			xP.gen('0')
-			xP.check(.RCBR)
-			return typ
-		}
-		xP.is_alloc = true
-		//println('setting is_alloc=true (ret $typ)')
-		xP.gen('($t.name*)memdup(&($t.name)  {')
-	}
-	*/
 	mut did_gen_something := false
 	// Loop thru all struct init keys and assign values
 	// u := User{age:20, name:'bob'}
@@ -3680,7 +3652,7 @@ fn (xP mut Parser) go_statement() {
 fn (xP mut Parser) register_var(var Var) {
 	if var.line_no_y == 0 {
 		scpos := xP.scanner.get_scanner_pos()
-		xP.cur_fn.register_var({ var | scanner_pos_x: scpos, line_no_y: scpos.line_no_y })
+		xP.cur_fn.register_var({ var | scanner_pos: scpos, line_no_y: scpos.line_no_y })
 	} else {
 		xP.cur_fn.register_var(var)
 	}
@@ -3745,12 +3717,10 @@ fn (xP mut Parser) json_decode() string {
 
 fn (xP mut Parser) attribute() {
 	xP.check(.LSBR)
-	if xP.tk == .key_interface {
-		xP.check(.key_interface)
+	xP.attr = xP.check_name()
+	if xP.tk == .COLON {
 		xP.check(.COLON)
-		xP.attr = 'interface:' + xP.check_name()
-	} else {
-		xP.attr = xP.check_name()
+		xP.attr = xP.attr + ':' + xP.check_name()
 	}
 	xP.check(.RSBR)
 	if xP.tk == .key_function || (xP.tk == .key_public && xP.peek() == .key_function) {

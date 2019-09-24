@@ -63,16 +63,6 @@ fn (xP &Parser) find_var_check_new_var(name string) ?Var {
 	return none
 }
 
-fn (f &Fn) find_var2(name string) Var {
-	for i in 0 .. f.var_idx {
-		if f.local_vars[i].name == name {
-			return f.local_vars[i]
-		}
-	}
-	return Var{}
-}
-
-
 fn (xP mut Parser) open_scope() {
 	xP.cur_fn.defer_text << ''
 	xP.cur_fn.scope_level++
@@ -198,7 +188,7 @@ fn (xP mut Parser) fn_decl() {
 			ref: is_amper
 			ptr: is_mutable
 			line_no_y: xP.scanner.line_no_y
-			scanner_pos_x: xP.scanner.get_scanner_pos()
+			scanner_pos: xP.scanner.get_scanner_pos()
 		}
 		f.args << receiver
 		f.register_var(receiver)
@@ -557,10 +547,10 @@ fn (xP mut Parser) check_unused_variables() {
 			break
 		}
 		if !var.is_used && !xP.pref.is_repl && !var.is_arg && !xP.pref.translated && var.name != '_' {
-			xP.production_error('`$var.name` declared and not used', var.scanner_pos_x )
+			xP.production_error('`$var.name` declared and not used', var.scanner_pos )
 		}
 		if !var.is_changed && var.is_mutable && !xP.pref.is_repl && !xP.pref.translated && var.name != '_' {
-			xP.error_with_position( '`$var.name` is declared as mutable, but it was never changed', var.scanner_pos_x )
+			xP.error_with_position( '`$var.name` is declared as mutable, but it was never changed', var.scanner_pos )
 		}
 	}
 }
@@ -735,7 +725,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 				is_arg: true
 				// is_mutable: is_mutable
 				line_no_y: xP.scanner.line_no_y
-				scanner_pos_x: xP.scanner.get_scanner_pos()
+				scanner_pos: xP.scanner.get_scanner_pos()
 			}
 			// f.register_var(var)
 			f.args << var
@@ -780,7 +770,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 				is_mutable: is_mutable
 				ptr: is_mutable
 				line_no_y: xP.scanner.line_no_y
-				scanner_pos_x: xP.scanner.get_scanner_pos()        
+				scanner_pos: xP.scanner.get_scanner_pos()
 			}
 			f.register_var(var)
 			f.args << var

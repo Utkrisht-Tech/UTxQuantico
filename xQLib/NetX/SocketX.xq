@@ -209,22 +209,19 @@ public fn dial(address string, port int) ?Socket {
 }
 
 // Send string data to socket
-public fn (s Socket) send(buf byteptr, len int) int {
-	res := C.send(s.sockfd, buf, len, 0)
-//	if res < 0 {
-//		return error('socket: send failed')
-//	}
+public fn (s Socket) send(buf byteptr, len int) int? {
+	res := int( C.send(s.sockfd, buf, len, 0) )
+	if res < 0 {
+		return error('socket: send failed')
+	}
 	return res
 }
 
 // Receive string data from socket
-public fn (s Socket) recv(bufsize int) byteptr {
+public fn (s Socket) recv(bufsize int) (byteptr, int) {
 	buf := malloc(bufsize)
-	res := C.recv(s.sockfd, buf, bufsize, 0)
-//	if res < 0 {
-//		return error('socket: recv failed')
-//	}
-	return buf
+	res := int( C.recv(s.sockfd, buf, bufsize, 0) )
+	return buf, res
 }
 
 // TODO: remove cread/2 and crecv/2 when the Go net interface is done
