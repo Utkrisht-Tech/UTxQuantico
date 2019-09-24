@@ -8,6 +8,7 @@ fn testXconst() {
 	assert b == true
 	assert a == 3
 	assert u == u64(1)
+	assert u == 1 // Make sure this works without the cast
 }
 
 fn testXstr_methods() {

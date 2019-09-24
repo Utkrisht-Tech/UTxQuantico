@@ -8,19 +8,36 @@ import os
 
 // parsed cflag
 struct CFlag{
+	mod   string // The module in which the flag was given
 	os    string // eg. linux | windows | darwin
 	name  string // eg. -I
 	value string // eg. /path/to/include
 }
 
+fn (c &CFlag) str() string {
+	return 'CFlag{ name: "$c.name" value: "$c.value" mod: "$c.mod" os: "$c.os" }'
+}
+
 // get flags for current os
-fn (xQ UTxQ) get_os_cflags() []CFlag {
+fn (xQ &UTxQ) get_os_cflags() []CFlag {
 	mut flags := []CFlag
 	for flag in xQ.table.cflags {
 		if flag.os == ''
 		|| (flag.os == 'linux' && xQ.os == .linux)
 		|| (flag.os == 'darwin' && xQ.os == .mac)
 		|| (flag.os == 'windows' && (xQ.os == .windows || xQ.os == .msvc)) {
+			flags << flag
+		}
+	}
+	return flags
+}
+
+fn (xQ &UTxQ) get_rest_of_module_cflags(c &CFlag) []CFlag {
+	mut flags := []CFlag
+	cflags := xQ.get_os_cflags()
+	for flag in cflags {
+		if c.mod == flag.mod {
+			if c.name == flag.name && c.value == flag.value && c.os == flag.os { continue }
 			flags << flag
 		}
 	}
@@ -52,7 +69,7 @@ fn (table &dataTable) has_cflag(cflag CFlag) bool {
 
 // parse the flags to (table.cflags) []CFlag
 // Note: clean up big time (UTx10101)
-fn (table mut dataTable) parse_cflag(cflag string) {
+fn (table mut dataTable) parse_cflag(cflag string, mod string) {
 	allowed_flags := [
 		'framework',
 		'library',
@@ -107,6 +124,7 @@ fn (table mut dataTable) parse_cflag(cflag string) {
 			index = -1
 		}
 		cf := CFlag{
+			mod:   mod,
 			os:    fos,
 			name:  name,
 			value: value
@@ -118,4 +136,54 @@ fn (table mut dataTable) parse_cflag(cflag string) {
 			break
 		}
 	}
+}
+
+//TODO: Implement MSVC specific c_options_before_target and c_options_after_target ...
+fn (cflags []CFlag) c_options_before_target() string {	
+	$if msvc {
+		return ''
+	}
+	// -I flags, optimization flags and so on
+	mut args:=[]string
+	for flag in cflags {
+		if flag.name != '-l' {
+			args << flag.format()
+		}
+	}
+	return args.join(' ')
+}
+
+fn (cflags []CFlag) c_options_after_target() string {
+	$if msvc {
+		return ''
+	}
+	// -l flags (libs)
+	mut args:=[]string
+	for flag in cflags {
+		if flag.name == '-l' {
+			args << flag.format()
+		}
+	}
+	return args.join(' ')
+}
+
+fn (cflags []CFlag) c_options_without_object_files() string {
+	mut args:=[]string
+	for flag in cflags {
+		if flag.value.ends_with('.o') || flag.value.ends_with('.obj') {
+			continue
+		}
+		args << flag.format()
+	}
+	return args.join(' ')
+}
+
+fn (cflags []CFlag) c_options_only_object_files() string {
+	mut args:=[]string
+	for flag in cflags {
+		if flag.value.ends_with('.o') || flag.value.ends_with('.obj') { 
+			args << flag.format()
+		}
+	}
+	return args.join(' ')
 }

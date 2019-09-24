@@ -297,45 +297,11 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 		'odbccp32.lib'
 	]
 
-	mut inc_paths := []string{}
-	mut lib_paths := []string{}
-	mut other_flags := []string{}
-
-	for flag in xQ.get_os_cflags() {
-		//println('fl: $flag.name | flag arg: $flag.value')
-
-		// We need to see if the flag contains -l
-		// -l isnt recognised and these libs will be passed straight to the linker
-		// by the compiler
-		if flag.name == '-l' {
-			if flag.value.ends_with('.dll') {
-				cerror('MSVC cannot link against a dll (`#flag -l $flag.value`)')
-			}
-			// MSVC has no method of linking against a .dll
-			// TODO: we should look for .defs aswell
-			lib_lib := flag.value + '.lib'
-			real_libs << lib_lib
-		}
-		else if flag.name == '-I' {
-			inc_paths << flag.format()
-		}
-		else if flag.name == '-L' {
-			lib_paths << flag.value
-			lib_paths << flag.value + os.PathSeparator + 'msvc'
-			// The above allows putting msvc specific .lib files in a subfolder msvc/ ,
-			// where gcc will NOT find them, but cl will do...
-			// NB: gcc is smart enough to not need .lib files at all in most cases, the .dll is enough.
-			// When both a msvc .lib file and .dll file are present in the same folder,
-			// as for example for glfw3, compilation with gcc would fail.
-		}
-		else if flag.value.ends_with('.o') {
-			// msvc expects .obj not .o
-			other_flags << '"${flag.value}bj"'
-		}
-		else {
-			other_flags << flag.value
-		}
-	}
+	sflags := xQ.get_os_cflags().msvc_string_flags()
+	real_libs   << sflags.real_libs
+	inc_paths   := sflags.inc_paths
+	lib_paths   := sflags.lib_paths
+	other_flags := sflags.other_flags
 
 	// Include the base paths
 	a << '-I "$r.ucrt_include_path"'
@@ -358,15 +324,13 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 	a << '/LIBPATH:"$r.vs_lib_path"'
 	a << '/INCREMENTAL:NO' // Disable incremental linking
 
-	for l in lib_paths {
-		a << '/LIBPATH:"' + os.realpath(l) + '"'
-	}
-
 	if !xQ.pref.is_prod {
 		a << '/DEBUG:FULL'
 	} else {
 		a << '/DEBUG:NONE'
 	}
+
+	a << lib_paths
 
 	args := a.join(' ')
 
@@ -400,7 +364,7 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 	os.rm(out_name_obj)
 }
 
-fn build_thirdParty_obj_file_with_msvc(path string) {
+fn build_thirdParty_obj_file_with_msvc(path string, modFlags []CFlag) {
 	msvc := find_msvc() or {
 		println('Could not find visual studio')
 		return
@@ -431,7 +395,9 @@ fn build_thirdParty_obj_file_with_msvc(path string) {
 
 	//println('cfiles: $cfiles')
 
-	cmd := '""$msvc.full_cl_exe_path" /volatile:ms /Z7 $include_string /c $cfiles /Fo"$obj_path""'
+	btarget := modFlags.c_options_before_target()
+	atarget := modFlags.c_options_after_target()
+	cmd := '""$msvc.full_cl_exe_path" /volatile:ms /Z7 $include_string /c $btarget $cfiles $atarget /Fo"$obj_path""'
 	//NB: the quotes above ARE balanced.
 	println('thirdParty cmd line: $cmd')
 	res := os.exec(cmd) or {
@@ -439,4 +405,60 @@ fn build_thirdParty_obj_file_with_msvc(path string) {
 		return
 	}
 	println(res.output)
+}
+
+struct MsvcStringFlags {
+mut:
+	real_libs []string
+	inc_paths []string
+	lib_paths []string
+	other_flags []string
+}
+
+fn (cflags []CFlag) msvc_string_flags() MsvcStringFlags {
+	mut real_libs := []string
+	mut inc_paths := []string
+	mut lib_paths := []string
+	mut other_flags := []string	
+	for flag in cflags {
+		//println('fl: $flag.name | flag arg: $flag.value')		
+		// We need to see if the flag contains -l
+		// -l isnt recognised and these libs will be passed straight to the linker
+		// by the compiler
+		if flag.name == '-l' {
+			if flag.value.ends_with('.dll') {
+				cerror('MSVC cannot link against a dll (`#flag -l $flag.value`)')
+			}
+			// MSVC has no method of linking against a .dll
+			// TODO: we should look for .defs aswell
+			lib_lib := flag.value + '.lib'
+			real_libs << lib_lib
+		}
+		else if flag.name == '-I' {
+			inc_paths << flag.format()
+		}
+		else if flag.name == '-L' {
+			lib_paths << flag.value
+			lib_paths << flag.value + os.PathSeparator + 'msvc'
+			// The above allows putting msvc specific .lib files in a subfolder msvc/ ,
+			// where gcc will NOT find them, but cl will do...
+			// NB: gcc is smart enough to not need .lib files at all in most cases, the .dll is enough.
+			// When both a msvc .lib file and .dll file are present in the same folder,
+			// as for example for glfw3, compilation with gcc would fail.
+		}
+		else if flag.value.ends_with('.o') {
+			// msvc expects .obj not .o
+			other_flags << '"${flag.value}bj"'
+		}
+		else {
+			other_flags << flag.value
+		}
+	}
+
+	mut lpaths := []string
+	for l in lib_paths {
+		lpaths << '/LIBPATH:"' + os.realpath(l) + '"'
+	}
+
+	return MsvcStringFlags{ real_libs, inc_paths, lpaths, other_flags }
 }

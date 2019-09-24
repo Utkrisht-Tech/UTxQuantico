@@ -151,7 +151,7 @@ fn (xP mut Parser) chash() {
 		flag = flag.replace('@XQROOT', xP.xQRoot)
 		flag = flag.replace('@XQMOD', ModPath)
 		xP.log('adding flag "$flag"')
-		xP.table.parse_cflag(flag)
+		xP.table.parse_cflag(flag, xP.mod)
 		return
 	}
 	if hash.starts_with('include') {

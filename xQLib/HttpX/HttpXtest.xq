@@ -2,8 +2,8 @@
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
-import NetX.urllib
-import HttpX
+// import NetX.urllib
+// import HttpX
 
 fn testXescape_unescape() {
 /*

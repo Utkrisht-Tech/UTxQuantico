@@ -279,11 +279,25 @@ fn (xP mut Parser) fn_decl() {
 	// Returns a type?
 	mut typ := 'void'
 	if xP.tk == .NAME || xP.tk == .STAR || xP.tk == .AMPER || xP.tk == .LSBR ||
-	xP.tk == .QUESTION {
+	xP.tk == .QUESTION || xP.tk == .LPAR {
 		xP.fgen(' ')
 		// TODO In
 		// if xP.tok in [ .NAME, .STAR, .AMPER, .LSBR ] {
 		typ = xP.get_type()
+	}
+	// Multiple returns
+	if typ.starts_with('MultiReturn_') {
+		if !xP.first_cp() && !xP.table.known_type(typ) {
+			xP.table.register_type2(Type{
+				cat: TypeCategory.struct, 
+				name: typ,
+				mod: xP.mod
+			})
+			for i, t in typ.replace('MultiReturn_', '').replace('_ZptrZ_', '*').split('_Z_') {
+				xP.table.add_field(typ, 'var_$i', t, false, '', .public)
+			}
+			xP.cgen.typedefs << 'typedef struct $typ $typ;'
+		}
 	}
 	// Translated C code can have empty functions (just definitions)
 	is_fn_header := !is_c && !is_sig && (xP.pref.translated || xP.pref.is_test) &&	xP.tk != .LCBR
@@ -715,6 +729,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 	if types_only {
 		for xP.tk != .RPAR {
 			typ := xP.get_type()
+			xP.check_and_register_used_imported_type(typ)
 			var := Var {
 				typ: typ
 				is_arg: true
@@ -746,6 +761,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 			xP.next()
 		}
 		mut typ := xP.get_type()
+		xP.check_and_register_used_imported_type(typ)
 		if is_mutable && is_primitive_type(typ) {
 			xP.error('mutable arguments are only allowed for arrays, maps, and structs.' +
 			'\nreturn values instead: `foo(n mut int)` => `foo(n int) int`')

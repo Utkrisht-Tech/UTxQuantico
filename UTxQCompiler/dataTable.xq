@@ -15,7 +15,7 @@ mut:
 	consts                 []Var
 	fns                    map[string]Fn
 	generic_fns            []GenFnTable //map[string]GenFnTable // generic_fns['listen_and_serve'] == ['Blog', 'Forum']
-	file_imports           []ParsedImportsTable // List of file Imports scoped to the parsed file
+	file_imports           map[string]ParsedImportsTable // List of file Imports scoped to the parsed file
 	cflags                 []CFlag //  ['-framework DotNet', '-WebGL']
 	fn_count               int // atomic
 	is_obfuscated          bool
@@ -31,9 +31,10 @@ mut:
 // Holds import information scoped to the parsed file
 struct ParsedImportsTable {
 mut:
-	module_name string
-	file_path   string
-	imports     map[string]string
+	module_name  string
+	file_path    string
+	imports      map[string]string // alias => module
+	used_imports []string          // alias
 }
 
 enum AccessMod {
@@ -607,7 +608,13 @@ fn (xP mut Parser) _check_types(got_, expected_ string, throw bool) bool {
 	if expected=='void*' && got=='int' {
 		return true
 	}
-
+	// Allow `myu64 == 1`
+	//if xP.fileis('Xtest') && is_number_type(got) && is_number_type(expected)  {
+		//xP.warn('got=$got exp=$expected $xP.is_const_lit')
+	//}
+	if is_number_type(got) && is_number_type(expected) && xP.is_const_lit {
+		return true
+	}
 	expected = expected.replace('*', '')
 	got = got.replace('*', '')
 	if got != expected {
@@ -819,8 +826,22 @@ fn (table &dataTable) qualify_module(mod string, file_path string) string {
 	return mod
 }
 
-fn new_file_import_table(file_path string) &ParsedImportsTable {
-	return &ParsedImportsTable{
+fn (table &dataTable) get_file_import_table(file_path string) ParsedImportsTable {
+	// if file_path.clone() in table.file_imports {
+	// 	return table.file_imports[file_path.clone()]
+	// }
+	// Just get imports. memory error when recycling import table
+	mut imports := map[string]string
+	if file_path in table.file_imports {
+		imports = table.file_imports[file_path].imports
+	}
+	mut pit := new_parsed_imports_table(file_path.clone())
+	pit.imports = imports
+	return pit
+}
+
+fn new_parsed_imports_table(file_path string) ParsedImportsTable {
+	return ParsedImportsTable{
 		file_path: file_path
 		imports:   map[string]string
 	}
@@ -835,7 +856,9 @@ fn (pit mut ParsedImportsTable) register_import(mod string) {
 }
 
 fn (pit mut ParsedImportsTable) register_alias(alias string, mod string) {
-	if alias in pit.imports {
+	// NOTE: Come back here
+	// if alias in pit.imports && pit.imports[alias] == mod {}
+	if alias in pit.imports && pit.imports[alias] != mod {
 		cerror('Cannot import $mod as $alias: import name $alias already in use in "${pit.file_path}".')
 	}
 	if mod.contains('.internal.') {
@@ -868,6 +891,16 @@ fn (pit &ParsedImportsTable) is_aliased(mod string) bool {
 
 fn (pit &ParsedImportsTable) resolve_alias(alias string) string {
 	return pit.imports[alias]
+}
+
+fn (pit mut ParsedImportsTable) register_used_import(alias string) {
+	if !(alias in pit.used_imports) {
+		pit.used_imports << alias
+	}
+}
+
+fn (pit &ParsedImportsTable) is_used_import(alias string) bool {
+	return alias in pit.used_imports
 }
 
 fn (t &Type) contains_field_type(typ string) bool {
@@ -940,10 +973,11 @@ fn (table &dataTable) find_misspelled_imported_mod(name string, pit &ParsedImpor
 	n1 := if name.starts_with('main.') { name.right(5) } else { name }
 	for alias, mod in pit.imports {
 		if (n1.len - alias.len > 2 || alias.len - n1.len > 2) { continue }
+		mod_alias := if alias == mod { alias } else { '$alias ($mod)' }
 		r := StringX.dice_coefficient(n1, alias)
 		if r > closest {
 			closest = r
-			closest_mod = '$alias ($mod)'
+			closest_mod = '$mod_alias'
 		}
 	}
 	return if closest >= min_match { closest_mod } else { '' }

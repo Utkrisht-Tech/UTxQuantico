@@ -4,7 +4,8 @@
 
 module stbiX
 
-import gl
+// NOTE: We might need special case for this
+// import gl
 
 #flag   -I @XQROOT/thirdParty/stb_image
 

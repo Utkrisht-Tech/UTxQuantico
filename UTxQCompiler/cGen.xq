@@ -5,7 +5,6 @@
 module main
 
 import os
-import StringX
 import time
 
 struct CGen {
@@ -240,7 +239,7 @@ fn (g mut CGen) add_to_main(s string) {
 }
 
 
-fn build_thirdParty_obj_file(path string) {
+fn build_thirdParty_obj_file(path string, modFlags []CFlag) {
 	obj_path := os.realpath(path)
 	if os.file_exists(obj_path) {
 		return
@@ -256,7 +255,9 @@ fn build_thirdParty_obj_file(path string) {
 	}
 	cc := find_c_compiler()
 	cc_thirdParty_options := find_c_compiler_thirdParty_options()
-	cmd := '$cc $cc_thirdParty_options -c -o "$obj_path" $cfiles'
+	btarget := modFlags.c_options_before_target()
+	atarget := modFlags.c_options_after_target()
+	cmd := '$cc $cc_thirdparty_options $btarget -c -o "$obj_path" $cfiles $atarget '
 	res := os.exec(cmd) or {
 		println('failed thirdParty object build cmd: $cmd')
 		cerror(err)

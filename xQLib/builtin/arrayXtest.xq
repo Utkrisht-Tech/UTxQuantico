@@ -2,8 +2,6 @@
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
-import os
-
 const (
 	test_arr = [1, 2, 3]
 	A = 8

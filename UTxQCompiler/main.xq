@@ -652,11 +652,13 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 		}
 	}
 	// Add remaining user files
+	mut i := 0
 	mut j := 0
 	mut len := -1
-	for i, pit in xQ.table.file_imports {
+	for _, pit in xQ.table.file_imports {
 		// Don't add a duplicate; builtin files are always there
 		if pit.file_path in xQ.files || pit.module_name == 'builtin' {
+			i++
 			continue
 		}
 		if len == -1 {
@@ -670,6 +672,7 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 		//println(pit)
 		//println('pit $pit.file_path')
 		xQ.files << pit.file_path
+		i++
 	}
 }
 
