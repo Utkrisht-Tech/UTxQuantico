@@ -355,20 +355,18 @@ public fn (s string) substr(start, end int) string {
 	return res
 }
 
-public fn (s string) index_old(p string) int {
-	if p.len > s.len {
+public fn (s string) index(st string) int {
+	if st.len > s.len {
 		return -1
 	}
 	mut i := 0
 	for i < s.len {
 		mut j := 0
-		mut ii := i
-		for j < p.len && s[ii] == p[j] {
+		for j < st.len && s[i + j] == st[j] {
 			j++
-			ii++
 		}
-		if j == p.len {
-			return i - p.len + 1
+		if j == st.len {
+			return i
 		}
 		i++
 	}
@@ -376,7 +374,7 @@ public fn (s string) index_old(p string) int {
 }
 
 // KMP search
-public fn (s string) index(p string) int {
+public fn (s string) index_kmp(p string) int {
     if p.len > s.len {
         return -1
     }

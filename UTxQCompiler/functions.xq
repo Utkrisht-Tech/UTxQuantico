@@ -18,8 +18,8 @@ struct Fn {
 mut:
 	name          string
 	mod           string
-	local_vars    []Var
-	var_idx       int
+	//local_vars    []Var
+	//var_idx       int
 	args          []Var
 	is_interface  bool
 	// called_fns    []string
@@ -36,19 +36,19 @@ mut:
 	//gen_types 	[]string
 }
 
-fn (f &Fn) find_var(name string) ?Var {
-	for i in 0 .. f.var_idx {
-		if f.local_vars[i].name == name {
-			return f.local_vars[i]
+fn (xP &Parser) find_var(name string) ?Var {
+	for i in 0 .. xP.var_idx {
+		if xP.local_vars[i].name == name {
+			return xP.local_vars[i]
 		}
 	}
 	return none
 }
 
 fn (xP &Parser) find_var_check_new_var(name string) ?Var {
-	for i in 0 .. xP.cur_fn.var_idx {
-		if xP.cur_fn.local_vars[i].name == name {
-			return xP.cur_fn.local_vars[i]
+	for i in 0 .. xP.var_idx {
+		if xP.local_vars[i].name == name {
+			return xP.local_vars[i]
 		}
 	}
 	// A hack to allow `newvar := Foo{ field: newvar }`
@@ -69,51 +69,66 @@ fn (xP mut Parser) open_scope() {
 }
 
 fn (xP mut Parser) mark_var_used(var Var) {
-	for i, kv in xP.cur_fn.local_vars {
-		if kv.name == var.name {
-			xP.cur_fn.local_vars[i].is_used = true
-		}
-	}
+	if var.idx == -1 || var.idx >= xP.local_vars.len {
+		return
+	}	
+	xP.local_vars[var.idx].is_used = true
 }
 
 fn (xP mut Parser) mark_var_returned(var Var) {
-	for i, vAr in xP.cur_fn.local_vars {
-		if vAr.name == var.name {
-			xP.cur_fn.local_vars[i].is_returned = true
-		}
-	}
+	if var.idx == -1 || var.idx >= xP.local_vars.len {
+		return
+	}	
+	xP.local_vars[var.idx].is_returned = true
 }
 
 fn (xP mut Parser) mark_var_changed(var Var) {
-	for i, kv in xP.cur_fn.local_vars {
-		if kv.name == var.name {
-			xP.cur_fn.local_vars[i].is_changed = true
-		}
-	}
+	if var.idx == -1 || var.idx >= xP.local_vars.len {
+		return
+	}	
+	xP.local_vars[var.idx].is_changed = true
 }
 
-fn (f mut Fn) known_var(name string) bool {
-	_ := f.find_var(name) or {
+fn (xP mut Parser) mark_arg_moved(var Var) {
+	for i, arg in xP.cur_fn.args {
+		if arg.name == var.name {
+			//println('Setting f $xP.cur_fn.name arg $arg.name to is_mutable')
+			xP.cur_fn.args[i].is_moved = true
+			break
+		}	
+	}	
+	xP.table.fns[xP.cur_fn.name] = xP.cur_fn
+}
+
+fn (xP mut Parser) known_var(name string) bool {
+	_ = xP.find_var(name) or {
 		return false
 	}	
 	return true
 }
 
-fn (f mut Fn) register_var(var Var) {
-	new_var := {var | scope_level: f.scope_level}
+fn (xP mut Parser) register_var(var Var) {
+	mut new_var := {var | idx: xP.var_idx, scope_level: xP.cur_fn.scope_level}
+	if var.line_no_y == 0 {
+		scpos := xP.scanner.get_scanner_pos()
+		new_var.scanner_pos = scpos
+		new_var.line_no_y = scpos.line_no_y
+	}
 	// Expand the array
-	if f.var_idx >= f.local_vars.len {
-		f.local_vars << new_var
+	if xP.var_idx >= xP.local_vars.len {
+		xP.local_vars << new_var
 	}
 	else {
-		f.local_vars[f.var_idx] = new_var
+		xP.local_vars[xP.var_idx] = new_var
 	}
-	f.var_idx++
+	xP.var_idx++
 }
 
-fn (f mut Fn) clear_vars() {
-	f.var_idx = 0
-	f.local_vars = []Var
+fn (xP mut Parser) clear_vars() {
+	// shared a := [1, 2, 3]
+	xP.var_idx = 0
+	xP.local_vars.free()
+	xP.local_vars = []Var
 }
 
 // xQLib header file
@@ -122,30 +137,25 @@ fn (xP mut Parser) is_sig() bool {
 	(xP.file_path.contains(ModPath))
 }
 
-fn new_fn(mod string, is_public bool) Fn {
-	return Fn {
-		mod: mod
-		local_vars: [Var{}].repeat(MaxLocalVars)
-		is_public: is_public
-	}
-
-
 // Function signatures are added to the top of the .c file in the first run.
 fn (xP mut Parser) fn_decl() {
+	xP.clear_vars() // clear local vars every time a new fn is started
 	xP.fgen('fn ')
 	//defer { xP.fgenln('\n') }
-	is_public := xP.tk == .key_public
+	mut f := Fn {
+		mod: xP.mod
+		is_public: xP.tk == .key_public
+	}
 	is_live := xP.attr == 'live' && !xP.pref.is_so  && xP.pref.is_live
 	if p.attr == 'live' &&  xP.first_cp() && !xP.pref.is_live && !xP.pref.is_so {
 		println('INFO: run `xQ -live program.xq` if you want to use [live] functions')
 	}
-	if is_public {
+	if f.is_public {
 		xP.next()
 	}
 	xP.returns = false
 	//xP.gen('/* returns $xP.returns */')
 	xP.next()
-	mut f := new_fn(xP.mod, is_public)
 	// Method receiver
 	mut receiver_typ := ''
 	if xP.tk == .LPAR {
@@ -191,7 +201,7 @@ fn (xP mut Parser) fn_decl() {
 			scanner_pos: xP.scanner.get_scanner_pos()
 		}
 		f.args << receiver
-		f.register_var(receiver)
+		xP.register_var(receiver)
 	}
 	if xP.tk == .PLUS || xP.tk == .MINUS || xP.tk == .STAR {
 		f.name = xP.tk.str()
@@ -279,7 +289,7 @@ fn (xP mut Parser) fn_decl() {
 	if typ.starts_with('MultiReturn_') {
 		if !xP.first_cp() && !xP.table.known_type(typ) {
 			xP.table.register_type2(Type{
-				cat: TypeCategory.struct, 
+				cat: TypeCategory.struct,
 				name: typ,
 				mod: xP.mod
 			})
@@ -542,7 +552,7 @@ _thread_so = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&reload_so, 0, 0, 0);
 }
 
 fn (xP mut Parser) check_unused_variables() {
-	for var in xP.cur_fn.local_vars {
+	for var in xP.local_vars {
 		if var.name == '' {
 			break
 		}
@@ -736,9 +746,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 	}
 	// `(a int, b, c string)` syntax
 	for xP.tk != .RPAR {
-		mut names := [
-		xP.check_name()
-		]
+		mut names := [ xP.check_name() ]
 		// `a,b,c int` syntax
 		for xP.tk == .COMMA {
 			xP.check(.COMMA)
@@ -763,7 +771,7 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 			if is_mutable {
 				typ += '*'
 			}
-			var := Var {
+			var := Var{
 				name: name
 				typ: typ
 				is_arg: true
@@ -772,14 +780,14 @@ fn (xP mut Parser) fn_args(f mut Fn) {
 				line_no_y: xP.scanner.line_no_y
 				scanner_pos: xP.scanner.get_scanner_pos()
 			}
-			f.register_var(var)
+			xP.register_var(var)
 			f.args << var
 		}
 		if xP.tk == .COMMA {
 			xP.next()
 		}
 		if xP.tk == .DOTDOT {
-			f.args << Var {
+			f.args << Var{
 				name: '..'
 			}
 			xP.next()
@@ -822,10 +830,9 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 			'_panic_debug ($xP.scanner.line_no_y, tos2((byte *)"$file_path"), tos2((byte *)"$mod_name"), tos2((byte *)"$fn_name"), '
 		))
 	}
-	// Receiver - first arg
 	for i, arg in f.args {
-		// println('$i) arg=$arg.name')
-		// Skip receiver, because it was already generated in the expression
+		// Receiver is the first arg
+		// Skip the receiver, because it was already generated in the expression
 		if i == 0 && f.is_method {
 			if f.args.len > 1 && !p.is_js {
 				xP.gen(',')
@@ -860,7 +867,7 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 			}
 			xP.check(.key_mutable)
 			var_name := xP.lit
-			var := xP.cur_fn.find_var(var_name) or {
+			var := xP.find_var(var_name) or {
 				xP.error('`$arg.name` is a mutable argument, you need to provide a variable to modify: `$f.name(... mut a...)`')
 				exit(1)
 			}
@@ -869,7 +876,14 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 			}
 		}
 		xP.expected_type = arg.typ
+		clone := xP.pref.autofree && arg.typ == 'string' && arg.is_moved && xP.mod != 'builtin'
+		if clone {
+			xP.gen('/*YY f=$f.name arg=$arg.name is_moved=$arg.is_moved*/string_clone(')
+		}	
 		typ := xP.bool_expression()
+		if clone {
+			xP.gen(')')
+		}
 		// Optimize `println`: replace it with `printf` to avoid extra allocations and
 		// function calls.
 		// `println(777)` => `printf("%d\n", 777)`
@@ -931,20 +945,30 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 		expected := arg.typ
 		// println('fn arg got="$got" exp="$expected"')
 		if !xP.check_types_no_throw(got, expected) {
-			mut err := 'Fn "$f.name" wrong arg #${i+1}. '
-			err += 'Expected "$arg.typ" ($arg.name)  but got "$typ"'
-			xP.error(err)
+			mut j := i
+			if f.is_method {
+				j--
+			}
+			mut nr := '${i+1}th'
+			if j == 0 {
+				nr = 'first'
+			} else if j == 1 {
+				nr = 'second'
+			} else if j == 2 {
+				nr = 'third'
+			}
+			xP.error('Cannot use type `$typ` as type `$arg.typ` in $nr ' + 'argument to `$f.name()`')
 		}
 		is_interface := xP.table.is_interface(arg.typ)
 		// Add `&` or `*` before an argument?
 		if !is_interface {
 			// Dereference
-			if got.contains('*') && !expected.contains('*') {
+			if got.ends_with('*') && !expected.ends_with('*') {
 				xP.cgen.set_shadow(sh, '*')
 			}
 			// Reference
 			// TODO ptr hacks. fix please.
-			if !got.contains('*') && expected.contains('*') && got != 'voidptr' {
+			if !got.ends_with('*') && expected.ends_with('*') && got != 'voidptr' {
 				// Special case for mutable arrays. We can't `&` function results,
 				// have to use `(array[]){ expr }` hack.
 				if expected.starts_with('array_') && expected.ends_with('*') {
@@ -1064,18 +1088,18 @@ fn (f &Fn) str_args(table &dataTable) string {
 }
 
 // Find local function variable with closest name to `name`
-fn (f &Fn) find_misspelled_local_var(name string, min_match f32) string {
+fn (xP &Parser) find_misspelled_local_var(name string, min_match f32) string {
 	mut closest := f32(0)
 	mut closest_var := ''
-	for var in f.local_vars {
-		if var.scope_level > f.scope_level {
+	for var in xP.local_vars {
+		if var.scope_level > xP.cur_fn.scope_level {
 			continue
 		}
 		n := name.all_after('.')
 		if var.name == '' || (n.len - var.name.len > 2 || var.name.len - n.len > 2) { continue }
-		r := StringX.dice_coefficient(var.name, n)
-		if r > closest {
-			closest = r
+		coeff := StringX.dice_coefficient(var.name, n)
+		if coeff > closest {
+			closest = coeff
 			closest_var = var.name
 		}
 	}

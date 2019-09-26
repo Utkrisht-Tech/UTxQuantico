@@ -532,7 +532,7 @@ fn _parse(rawurl string, via_request bool) ?URL {
 	// raw_path is a hint of the encoding of path. We don't want to set it if
 	// the default escaping of path is equivalent, to help make sure that people
 	// don't rely on it in general.
-	_ := url.set_path(rest) or {
+	_ = url.set_path(rest) or {
 		return error(err)
 	}
 	return url
@@ -817,7 +817,7 @@ public fn (u &URL) str() string {
 // interpreted as a key set to an empty value.
 public fn parse_query(query string) ?Values {
 	mut m := new_values()
-	_ := _parse_query(mut m, query) or {
+	_ = _parse_query(mut m, query) or {
 		return error(err)
 	}
 	return m
@@ -827,7 +827,7 @@ public fn parse_query(query string) ?Values {
 // but any errors will be silent
 fn parse_query_silent(query string) Values {
 	mut m := new_values()
-	_ := _parse_query(mut m, query)
+	_ = _parse_query(mut m, query)
 	return m
 }
 

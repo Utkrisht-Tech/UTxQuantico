@@ -12,7 +12,7 @@ const (
 	err_comment_is_delimiter = error('EncodingX.csv: comment cannot be the same as delimiter')
 	err_invalid_delimiter    = error('EncodingX.csv: invalid delimiter')
 	err_eof                  = error('EncodingX.csv: end of file')
-	err_invalid_line_end     = error('EncodingX.csv: could not find any valid line endings.')
+	err_invalid_line_end     = error('EncodingX.csv: could not find any valid line endings')
 )
 
 

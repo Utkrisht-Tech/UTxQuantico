@@ -192,7 +192,7 @@ fn main() {
 		xQ.cgen.lines.free()
 		free(xQ.cgen)
 		for _, f in xQ.table.fns {
-			f.local_vars.free()
+			//f.local_vars.free()
 			f.args.free()
 			//f.defer_text.free()
 		}	
@@ -217,7 +217,7 @@ fn (xQ mut UTxQ) add_parser(parser Parser) {
 fn (xQ mut UTxQ) compile() {
 	// Prevent people on linux from being able to build with msvc
 	if os.user_os() != 'windows' && xQ.os == .msvc {
-		cerror('Cannot build with msvc on ${os.user_os()}')
+		xQError('Cannot build with msvc on ${os.user_os()}')
 	}
 
 	mut cgen := xQ.cgen
@@ -239,8 +239,7 @@ fn (xQ mut UTxQ) compile() {
 	for file in xQ.files {
 		mut xP := xQ.new_parser(file)
 		xP.parse(.decl)
-
-		
+		//if xP.pref.autofree {		xP.scanner.text.free()		free(xP.scanner)	}
 	}
 	// Main CheckPoint
 	cgen.cp = CheckPoint.main
@@ -306,6 +305,7 @@ fn (xQ mut UTxQ) compile() {
 	for file in xQ.files {
 		mut xP := xQ.new_parser(file)
 		xP.parse(.main)
+		//if xP.pref.autofree {		xP.scanner.text.free()		free(xP.scanner)	}
 		// xP.g.gen_x64()
 		// Format all files (don't format automatically generated xQLib headers)
 		if !xQ.pref.noxQFmt && !file.contains('/xQLib/') {
@@ -356,11 +356,6 @@ fn (xQ mut UTxQ) generate_main() {
 	// if xQ.build_mode in [.default, .embed_xQLib] {
 	if xQ.pref.build_mode == .default_mode || xQ.pref.build_mode == .embed_xQLib {
 		mut consts_init_body := cgen.consts_init.join_lines()
-		for imp in xQ.table.imports {
-			if imp == 'http' {
-				consts_init_body += '\n http__init_module();'
-			}
-		}
 		// xQLib can't have `init_consts()`
 		cgen.genln('void init_consts() {
 #ifdef _WIN32
@@ -430,11 +425,11 @@ string _STR_TMP(const char *fmt, ...) {
 		}
 		else if xQ.pref.is_test {
 			if xQ.table.main_exists() {
-				cerror('Test files cannot have function `main`')
+				xQError('Test files cannot have function `main`')
 			}	
 			// Make sure there's at least on test function
 			if !xQ.table.has_at_least_one_test_fn() {
-				cerror('Test files need to have at least one test function')
+				xQError('Test files need to have at least one test function')
 			}	
 			// Generate `main` which calls every single test function
 			cgen.genln('int main() { init_consts();')
@@ -491,9 +486,9 @@ fn (xQ UTxQ) run_compiled_executable_and_exit() {
 fn (xQ &UTxQ) xQ_files_from_dir(dir string) []string {
 	mut res := []string
 	if !os.file_exists(dir) {
-		cerror('$dir doesn\'t exist')
+		xQError('$dir doesn\'t exist')
 	} else if !os.dir_exists(dir) {
-		cerror('$dir isn\'t a directory')
+		xQError('$dir isn\'t a directory')
 	}
 	mut files := os.ls(dir)
 	if xQ.pref.is_verbose {
@@ -573,11 +568,13 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 	for file in xQ.files {
 		mut xP := xQ.new_parser(file)
 		xP.parse(.imports)
+		//if xP.pref.autofree {		xP.scanner.text.free()		free(xP.scanner)	}
 	}
 	// Parse user imports
 	for file in user_files {
 		mut xP := xQ.new_parser(file)
 		xP.parse(.imports)
+		//if xP.pref.autofree {		xP.scanner.text.free()		free(xP.scanner)	}
 	}
 	// Parse lib imports
 /*
@@ -590,12 +587,13 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 			import_path := '$ModPath/xQLib/$mod_path'
 			xQFiles := xQ.xQ_files_from_dir(import_path)
 			if xQFiles.len == 0 {
-				cerror('cannot import module $mod (no .xq files in "$import_path").')
+				xQError('cannot import module $mod (no .xq files in "$import_path")')
 			}
 			// Add all imports referenced by these libs
 			for file in xQFiles {
 				mut xP := xQ.new_parser(file, CheckPoint.imports)
 				xP.parse()
+				if xP.pref.autofree {		xP.scanner.text.free()		free(xP.scanner)	}
 			}
 		}
 	}
@@ -608,12 +606,13 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 		import_path := xQ.find_module_path(mod)
 		xQFiles := xQ.xQ_files_from_dir(import_path)
 		if xQFiles.len == 0 {
-			cerror('cannot import module $mod (no .xq files in "$import_path").')
+			xQError('cannot import module $mod (no .xq files in "$import_path")')
 		}
 		// Add all imports referenced by these libs
 		for file in xQFiles {
 			mut xP := xQ.new_parser(file)
 			xP.parse(.imports)
+			//if xP.pref.autofree {		xP.scanner.text.free()		free(xP.scanner)	}
 		}
 	}
 	if xQ.pref.is_verbose {
@@ -626,7 +625,7 @@ fn (xQ mut UTxQ) add_xQ_files_to_compile() {
 	deps_resolved := dep_graph.resolve()
 	if !deps_resolved.acyclic {
 		deps_resolved.display()
-		cerror('Import cycle detected.')
+		xQError('Import cycle detected')
 	}
 	// add imports in correct order
 	for mod in deps_resolved.imports() {
@@ -922,7 +921,7 @@ fn update_UTxQ() {
 	println('Updating UTxQuantico...')
 	xQRoot := os.dir(os.executable())
 	s := os.exec('git -C "$xQRoot" pull --rebase origin master') or {
-		cerror(err)
+		xQError(err)
 		return
 	}
 	println(s.output)
@@ -933,13 +932,13 @@ fn update_UTxQ() {
 		}
 		os.mv('$xQRoot/UTxQ.exe', xQ_backup_file)
 		s2 := os.exec('"$xQRoot/make.bat"') or {
-			cerror(err)
+			xQError(err)
 			return
 		}
 		println(s2.output)
 	} $else {
 		s2 := os.exec('make -C "$xQRoot"') or {
-			cerror(err)
+			xQError(err)
 			return
 		}
 		println(s2.output)
@@ -972,20 +971,20 @@ fn install_UTxQ(args[]string) {
 		//println('Building xQGet...')
 		os.chdir(xQRoot + '/xQTools')
 		xQGetcompilation := os.exec('$xQExec -o $xQGet xQGet.xq') or {
-			cerror(err)
+			xQError(err)
 			return
 		}
 		if xQGetcompilation.exit_code != 0 {
-			cerror( xQGetcompilation.output )
+			xQError( xQGetcompilation.output )
 			return
 		}
 	}
 	xQGetresult := os.exec('$xQGet ' + names.join(' ')) or {
-		cerror(err)
+		xQError(err)
 		return
 	}
 	if xQGetresult.exit_code != 0 {
-		cerror( xQGetresult.output )
+		xQError( xQGetresult.output )
 		return
 	}
 }
@@ -1080,7 +1079,7 @@ fn create_symlink() {
 	}
 }
 
-public fn cerror(s string) {
+public fn xQError(s string) {
 	println('UTxQ error: $s')
 	os.flush_stdout()
 	exit(1)

@@ -8,7 +8,7 @@ fn start_socket_udp_server() {
 	bufsize := 1024
 	bytes := [1024]byte
 	s := NetX.socket_udp() or { panic(err) }
-	_ := s.bind( 9876 ) or { panic(err) }
+	_ = s.bind( 9876 ) or { panic(err) }
 	println('Waiting for udp packets:')
 	for {
 		res := s.crecv(bytes, bufsize)

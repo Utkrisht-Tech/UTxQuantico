@@ -8,7 +8,7 @@ fn testXsocket() {
 	mut server := NetX.listen(0) or {
 		println(err)
 		return
-	}    
+	}
 	server_port := server.get_port()
 	mut client := NetX.dial('127.0.0.1', server_port) or {
 		println(err)
@@ -24,7 +24,7 @@ fn testXsocket() {
 	$if debug {	println('message send: $message')	}
 	$if debug {	println('send socket: $socket.sockfd')	}
 
-	bytes, blen := client.recv(1024) 
+	bytes, blen := client.recv(1024)
 	received := tos(bytes, blen)
 	$if debug {	println('message received: $received')	}
 	$if debug {	println('client: $client.sockfd')	}

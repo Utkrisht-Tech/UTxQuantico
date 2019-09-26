@@ -205,7 +205,7 @@ fn find_msvc() ?MsvcResult {
 		}
 	}
 	$else {
-		cerror('Cannot find msvc on this OS')
+		xQError('Cannot find msvc on this OS')
 		return error('msvc not found')
 	}
 }
@@ -216,7 +216,7 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 		if !xQ.pref.is_debug && xQ.out_name_c != 'UTxQ.c' && xQ.out_name_c != 'UTxQ_macos.c' {
 			os.rm(xQ.out_name_c)
 		}
-		cerror('Cannot find MSVC on this OS.')
+		xQError('Cannot find MSVC on this OS')
 		return
 	}
 
@@ -347,11 +347,11 @@ public fn (xQ mut UTxQ) XCompiler_msvc() {
 
 	res := os.exec(cmd) or {
 		println(err)
-		cerror('msvc error')
+		xQError('msvc error')
 		return
 	}
 	if res.exit_code != 0 {
-		cerror(res.output)
+		xQError(res.output)
 	}
 	// println(res)
 	// println('C OUTPUT:')
@@ -401,7 +401,7 @@ fn build_thirdParty_obj_file_with_msvc(path string, modFlags []CFlag) {
 	//NB: the quotes above ARE balanced.
 	println('thirdParty cmd line: $cmd')
 	res := os.exec(cmd) or {
-		cerror(err)
+		xQError(err)
 		return
 	}
 	println(res.output)
@@ -427,7 +427,7 @@ fn (cflags []CFlag) msvc_string_flags() MsvcStringFlags {
 		// by the compiler
 		if flag.name == '-l' {
 			if flag.value.ends_with('.dll') {
-				cerror('MSVC cannot link against a dll (`#flag -l $flag.value`)')
+				xQError('MSVC cannot link against a dll (`#flag -l $flag.value`)')
 			}
 			// MSVC has no method of linking against a .dll
 			// TODO: we should look for .defs aswell

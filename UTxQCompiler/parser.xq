@@ -10,70 +10,72 @@ import (
 )
 
 struct Parser {
-	file_path      string // "/home/user/hello.xq"
-	file_name      string // "hello.xq"
-	file_platform  string // ".xq", "_win.xq", "_nix.xq", "_mac.xq", "_lin.xq" ...
-	file_xPcguard  string // When xP.file_xPcguard != '', it contains a
-	                      // C ifdef guard clause that must be put before
-	                      // the #include directives in the parsed .xq file
-
-	xQ             &UTxQ
-	pref           &Preferences // Preferences shared from UTxQ struct
+	file_path					string // "/home/user/hello.xq"
+	file_name					string // "hello.xq"
+	file_platform				string // ".xq", "_win.xq", "_nix.xq", "_mac.xq", "_lin.xq" ...
+	// When xP.file_xPCguard != '', it contains a
+	// C ifdef guard clause that must be put before
+	// the #include directives in the parsed .xq file
+	file_xPCguard				string
+	xQ							&UTxQ
+	pref						&Preferences // Preferences shared from UTxQ struct
 mut:
-	scanner        &Scanner
-	// tokens      []Token // TODO cache all tokens, right now they have to be scanned twice
-	token_idx      int
-	tk             Token
-	prev_tk        Token
-	prev_tk2       Token // TODO remove these once the tokens are cached
-	lit            string
-	cgen           &CGen
-	table          &dataTable
-	import_table   ParsedImportsTable // Holds imports for just the file being parsed
-	cp             CheckPoint
-	os             OS
-	mod            string
-	inside_const   bool
-	expr_var       Var
-	has_immutable_field bool
-	first_immutable_field Var
-	assigned_type  string
-	expected_type  string
-	tmp_count      int
-	is_script      bool
-	builtin_mod    bool
-	xQh_lines      []string
-	inside_if_expr bool
+	scanner						&Scanner
+	// tokens					[]Token // TODO cache all tokens, right now they have to be scanned twice
+	token_idx					int
+	tk							Token
+	prev_tk						Token
+	prev_tk2					Token // TODO remove these once the tokens are cached
+	lit							string
+	cgen						&CGen
+	table						&dataTable
+	import_table				ParsedImportsTable // Holds imports for just the file being parsed
+	cp							CheckPoint
+	os							OS
+	mod							string
+	inside_const				bool
+	expr_var					Var
+	has_immutable_field			bool
+	first_immutable_field		Var
+	assigned_type				string // Non-empty if we are in an assignment expression
+	expected_type				string
+	tmp_count					int
+	is_script					bool
+	builtin_mod					bool
+	xQh_lines					[]string
+	inside_if_expr				bool
 	inside_unwrapping_match_statement bool
-	inside_return_expr bool
-	is_struct_init bool
-	if_expr_count  int
-	for_expr_count int // to detect whether `continue` can be used
-	ptr_cast       bool
-	calling_c      bool
-	cur_fn         Fn
-	returns        bool
-	xQRoot         string
-	is_c_struct_init bool
-	is_empty_c_struct_init bool
-	is_c_fn_call   bool
-	can_chash      bool
-	attr           string
-	xQ_script 		 bool // "UTxQ bash", import all os functions into global space
-	var_decl_name	 string 	// To allow declaring the variable so that it can be used in the struct initialization
-	is_alloc		   bool // Whether current expression resulted in an allocation
-	is_const_lit	bool // `1`, `2.0` etc, so that `u64 == 0` works
-	cur_gen_type	 string // "App" to replace "T" in current generic function
-	is_WebX        bool
-	is_SqlX        bool
-	is_js			bool
-	SqlX_i         int  // $1 $2 $3
-	SqlX_params    []string // ("select * from users where id = $1", ***"100"***)
-	SqlX_types 		 []string // int, string and so on; see SqlX_params
+	inside_return_expr			bool
+	is_struct_init				bool
+	if_expr_count				int
+	for_expr_count				int // To detect whether `continue` can be used
+	ptr_cast					bool
+	calling_c					bool
+	cur_fn						Fn
+	local_vars					[]Var // Local function variables
+	var_idx						int
+	returns						bool
+	xQRoot						string
+	is_c_struct_init			bool
+	is_empty_c_struct_init		bool
+	is_c_fn_call				bool
+	can_chash					bool
+	attr						string
+	xQ_script					bool // "UTxQ bash", import all os functions into global space
+	var_decl_name				string 	// To allow declaring the variable so that it can be used in the struct initialization
+	is_alloc					bool // Whether current expression resulted in an allocation
+	is_const_lit				bool // `1`, `2.0` etc, so that `u64 == 0` works
+	cur_gen_type				string // "App" to replace "T" in current generic function
+	is_WebX						bool
+	is_SqlX						bool
+	is_js						bool
+	SqlX_i						int  // $1 $2 $3
+	SqlX_params					[]string // ("select * from users where id = $1", ***"100"***)
+	SqlX_types					[]string // int, string and so on; see SqlX_params
 }
 
 const (
-	EmptyFn = Fn { }
+	EmptyFn = Fn{}
 	MainFn= Fn{name:'main'}
 )
 
@@ -83,12 +85,12 @@ const (
 
 fn (xQ mut UTxQ) new_parser(path string) Parser {
 	//println('new_parser("$path")')
-	mut path_xPcguard := ''
+	mut path_xPCguard := ''
 	mut path_platform := '.xq'
 	for path_ending in ['_lin.xq', '_mac.xq', '_win.xq', '_nix.xq'] {
 		if path.ends_with(path_ending) {
 			path_platform = path_ending
-			path_xPcguard = platform_postfix_to_ifdefguard( path_ending )
+			path_xPCguard = platform_postfix_to_ifdefguard( path_ending )
 			break
 		}
 	}
@@ -98,7 +100,7 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 		file_path: path
 		file_name: path.all_after('/')
 		file_platform: path_platform
-		file_xPcguard: path_xPcguard
+		file_xPCguard: path_xPCguard
 		scanner: new_scanner(path)
 		table: xQ.table
 		import_table: xQ.table.get_file_import_table(path)
@@ -108,6 +110,7 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 		pref: xQ.pref
 		os: xQ.os
 		xQRoot: xQ.xQRoot
+		local_vars: [Var{}].repeat(MaxLocalVars)
 	}
 
 	$if js {
@@ -152,7 +155,7 @@ fn (xP &Parser) log(s string) {
 
 fn (xP mut Parser) parse(cp CheckPoint) {
 	xP.cp = cp
-	xP.log('\nparse() run=$xP.cp file=$xP.file_name tk=${xP.strtk()}')// , "script_file=", script_file)
+	//xP.log('\nparse() run=$xP.cp file=$xP.file_name tk=${xP.strtk()}')// , "script_file=", script_file)
 	// `module main` is not required if it's a single file program
 	if xP.is_script || xP.pref.is_test {
 		xP.mod = 'main'
@@ -272,17 +275,19 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 			g += '; // global'
 			xP.cgen.consts << g
 		case Token.EOF:
-			xP.log('end of parse()')
-			if xP.is_script && !xP.pref.is_test {
-				xP.set_current_fn( MainFn )
-				xP.check_unused_variables()
-			}
+			//xP.log('end of parse()')
+			// TODO: Check why this was added? everything seems to work
+			// without it, and it's already happening in fn_decl
+			//if xP.is_script && !xP.pref.is_test {
+			//	xP.set_current_fn( MainFn )
+			//	xP.check_unused_variables()
+			//}
 			if !xP.first_cp() && !xP.pref.is_repl {
 				xP.check_unused_imports()
 			}
 			if false && !xP.first_cp() && xP.fileis('main.xq') {
 				out := os.create('/var/tmp/fmt.xq') or {
-					cerror('failed to create fmt.xq')
+					xQError('failed to create fmt.xq')
 					return
 				}
 				out.writeln(xP.scanner.format_out.str())
@@ -303,7 +308,7 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 				if xP.cur_fn.name == '' {
 					xP.set_current_fn( MainFn )
 					if xP.pref.is_repl {
-						xP.cur_fn.clear_vars()
+						xP.clear_vars()
 					}
 				}
 				mut start := xP.cgen.lines.len
@@ -349,7 +354,7 @@ fn (xP mut Parser) import_statement() {
 		xP.error('bad import format')
 	}
 	if xP.peek() == .NUMBER && xP.scanner.text[xP.scanner.pos_x + 1] == `.` {
-		xP.error('bad import format. module/submodule names cannot begin with a number.')
+		xP.error('bad import format. module/submodule names cannot begin with a number')
 	}
 	mut mod := xP.check_name().trim_space()
 	mut mod_alias := mod
@@ -376,7 +381,7 @@ fn (xP mut Parser) import_statement() {
 	if mod in xP.table.imports {
 		return
 	}
-	xP.log('adding import $mod')
+	//xP.log('adding import $mod')
 	xP.table.imports << mod
 	xP.table.register_module(mod)
 
@@ -466,7 +471,7 @@ fn (xP mut Parser) interface_method(field_name, receiver string) &Fn {
 		is_method: true
 		receiver_typ: receiver
 	}
-	xP.log('is interface. field=$field_name run=$xP.cp')
+	//xP.log('is interface. field=$field_name run=$xP.cp')
 	xP.fn_args(mut method)
 	if xP.scanner.has_gone_over_line_end() {
 		method.typ = 'void'
@@ -485,7 +490,7 @@ fn key_to_type_cat(tk Token) TypeCategory {
 	case Token.key_union: return TypeCategory.union
 	//Token.key_ => return .interface
 	}
-	cerror('Unknown token: $tk')
+	xQError('Unknown token: $tk')
 	return TypeCategory.builtin
 }
 
@@ -707,6 +712,7 @@ fn (xP mut Parser) enum_decl(_enum_name string) {
 		if xP.tk == .COMMA {
 			xP.next()
 		}
+		// !!!! NAME free
 		xP.table.register_const(name, enum_name, xP.mod)
 		val++
 	}
@@ -847,19 +853,19 @@ fn (xP mut Parser) get_type() string {
 	// Multiple returns
 	if xP.tk == .LPAR {
 		// if xP.inside_tuple {xP.error('unexpected (')}
-		// xP.inside_tuple = true 
-		xP.check(.LPAR) 
-		mut types := []string 
+		// xP.inside_tuple = true
+		xP.check(.LPAR)
+		mut types := []string
 		for {
 			types << xP.get_type()
 			if xP.tk != .COMMA {
-				break 
-			} 
-			xP.check(.COMMA) 
+				break
+			}
+			xP.check(.COMMA)
 		}
-		xP.check(.RPAR) 
-		// xP.inside_tuple = false 
-		return 'MultiReturn_' + types.join('_Z_').replace('*', '_ZptrZ_')
+		xP.check(.RPAR)
+		// xP.inside_tuple = false
+		return '_UTXQ_MultiRet_' + types.join('_UTXQ_').replace('*', '_PTR_')
 	}
 	// fn type
 	if xP.tk == .key_function {
@@ -962,7 +968,7 @@ fn (xP mut Parser) get_type() string {
 		typ = xP.lit
 	}
 	else {
-		if warn {
+		if warn && xP.mod != 'ui' {
 			xP.warn('use `&Foo` instead of `*Foo`')
 		}
 		// Module specified? (e.g. gx.Image)
@@ -1018,12 +1024,9 @@ fn (xP mut Parser) get_type() string {
 		xP.register_array(typ)
 	}
 	xP.next()
-	if xP.tk == .QUESTION || is_question {
+	if is_question {
 		typ = 'Option_$typ'
 		xP.table.register_type_with_parent(typ, 'Option')
-		if xP.tk == .QUESTION {
-			xP.next()
-		}
 	}
 	// Because the code uses * to see if it's a pointer
 	if typ == 'byteptr' {
@@ -1055,7 +1058,7 @@ fn (xP &Parser) print_tk() {
 
 // statements() returns the type of the last statement
 fn (xP mut Parser) statements() string {
-	xP.log('statements()')
+	//xP.log('statements()')
 	typ := xP.statements_no_rcbr()
 	if !xP.inside_if_expr {
 		xP.genln('}')
@@ -1108,38 +1111,37 @@ fn (xP mut Parser) close_scope() {
 	// println('close_scope level=$f.scope_level var_idx=$f.var_idx')
 	// Move back `var_idx` (pointer to the end of the array) till we reach the previous scope level.
 	// This effectivly deletes (closes) current scope.
-	mut i := xP.cur_fn.var_idx - 1
+	mut i := xP.var_idx - 1
 	for ; i >= 0; i-- {
-		xQ := xP.cur_fn.local_vars[i]
-		//if xP.cur_fn.name == 'main' {
-			//println('var in main $xQ.name $xQ.typ $xQ.is_alloc ptr=$xQ.ptr')
-		//}
-		if xQ.scope_level != xP.cur_fn.scope_level {
-			// println('breaking. "$xQ.name" xQ.scope_level=$xQ.scope_level')
+		var := xP.local_vars[i]
+		if var.scope_level != xP.cur_fn.scope_level {
 			break
 		}
 		// Clean up memory, only do this if -autofree was passed for now
-		if xP.pref.autofree && xP.is_alloc && !xP.pref.is_test {
+		if xP.pref.autofree && xP.is_alloc { // && !xP.pref.is_test {
 			mut free_fn := 'free'
-			if xQ.typ.starts_with('array_') {
+			if var.typ.starts_with('array_') {
 				free_fn = 'xQ_array_free'
-			} else if xQ.typ == 'string' {
+			} else if var.typ == 'string' {
 				free_fn = 'xQ_string_free'
-				continue
-			} else if xQ.ptr || xQ.typ.ends_with('*') {
+				//if xP.fileis('str.xq') {
+					//println('Freeing str $var.name')
+				//}
+				//continue
+			} else if var.ptr || var.typ.ends_with('*') {
 				free_fn = 'xQ_ptr_free'
 				//continue
 			} else {
 				continue
 			}
-			//if false && xP.returns {
 			if xP.returns {
-				if !xQ.is_returned && xQ.typ != 'FILE*' { //!xQ.is_c {
-					prev_line := xQ.cgen.lines[xQ.cgen.lines.len-2]
-					xQ.cgen.lines[xQ.cgen.lines.len-2] = '$free_fn($xQ.name); /* :) close_scope free $xQ.typ */' + prev_line
+				// Don't free a variable that's being returned
+				if !var.is_returned && var.typ != 'FILE*' { //!var.is_c {
+					prev_line := xP.cgen.lines[xP.cgen.lines.len-2]
+					xP.cgen.lines[xP.cgen.lines.len-2] = '$free_fn($var.name); /* :) close_scope free $var.typ */' + prev_line
 				}
 			} else {
-				xP.genln('$free_fn($xQ.name); // close_scope free')
+				xP.genln('$free_fn($var.name); // close_scope free')
 			}
 		}
 	}
@@ -1149,7 +1151,7 @@ fn (xP mut Parser) close_scope() {
 	}
 	xP.cur_fn.scope_level--
 	xP.cur_fn.defer_text = xP.cur_fn.defer_text.left(xP.cur_fn.scope_level + 1)
-	xP.cur_fn.var_idx = i + 1
+	xP.var_idx = i + 1
 	// println('close_scope new var_idx=$f.var_idx\n')
 }
 
@@ -1188,10 +1190,14 @@ fn (xP mut Parser) statement(add_semi bool) string {
 			xP.check(.COLON)
 			return ''
 		}
-		// `a := 777` 
+		// `a := 777`
 		else if xP.peek() == .DECL_ASSIGN || xP.peek() == .COMMA {
-			xP.log('var decl')
+			//xP.log('var decl')
 			xP.var_decl()
+		}
+		// `_ = 777`
+		else if xP.lit == '_' && xP.peek() == .ASSIGN {
+			xP.gen_blank_identifier_assign()
 		}
 		else {
 			// panic and exit count as returns since they stop the function
@@ -1282,7 +1288,7 @@ fn (xP mut Parser) assign_statement(val Var, sh int, is_map bool) {
 				println('make the receiver `$val.name` mutable: fn ($val.name mut $val.typ) $xP.cur_fn.name (...) {')
 			}
 		}
-		xP.error('`$val.name` is immutable.')
+		xP.error('`$val.name` is immutable')
 	}
 	if !val.is_changed {
 		xP.mark_var_changed(val)
@@ -1364,26 +1370,36 @@ fn (xP mut Parser) var_decl() {
 	// multiple returns
 	if names.len > 1 {
 		// should we register __ret var?
-		types = t.replace('MultiReturn_', '').replace('_ZptrZ_', '*').split('_Z_')
+		types = t.replace('_UTXQ_MultiRet_', '').replace('_PTR_', '*').split('_UTXQ_')
 	}
 	for i, name in names {
-		typ := types[i]
-		if names.len > 1 {
-			xP.gen(';\n')
-			xP.gen('$typ $name = ${mr_var_name}.var_$i')
+		if name == '_' {
+			if names.len == 1 {
+				xP.error('No new variables on left side of `:=`')
+			}
+			continue
 		}
+		typ := types[i]
 		// println('var decl tk=${xP.strtk()} ismutable=$is_mutable')
 		var_scanner_pos := xP.scanner.get_scanner_pos()
 		// name := xP.check_name()
 		// xP.var_decl_name = name
 		// Don't allow declaring a variable with the same name. Even in a child scope
 		// (shadowing is not allowed)
-		if !xP.builtin_mod && xP.cur_fn.known_var(name) {
-			// v := xP.cur_fn.find_var(name)
+		if !xP.builtin_mod && xP.known_var(name) {
+			// var := xP.cur_fn.find_var(name)
 			xP.error('redefinition of `$name`')
 		}
 		if name.len > 1 && contains_capital(name) {
 			xP.error('variable names cannot contain uppercase letters, use snake_case instead')
+		}
+		if names.len > 1 {
+			if names.len != types.len {
+				mr_fn := xP.cgen.cur_line.find_between('=', '(').trim_space()
+				xP.error('Assignment mismatch: ${names.len} variables but `$mr_fn` returns $types.len values')
+			}
+			xP.gen(';\n')
+			xP.gen('$typ $name = ${mr_var_name}.var_$i')
 		}
 		// xP.check_space(.DECL_ASSIGN) // :=
 		// typ := xP.gen_var_decl(name, is_static)
@@ -1395,8 +1411,10 @@ fn (xP mut Parser) var_decl() {
 			scanner_pos: var_scanner_pos
 			line_no_y: var_scanner_pos.line_no_y
 		})
+		//if xP.fileis('str.xq') {
+			//if xP.is_alloc { println('REG VAR IS ALLOC $name') }
+		//}
 	}
-	//if xP.is_alloc { println('REG VAR IS ALLOC $name') }
 	xP.var_decl_name = ''
 	xP.is_empty_c_struct_init = false
 }
@@ -1554,7 +1572,7 @@ fn (xP mut Parser) name_expr() string {
 	// //////////////////////////
 	// module ?
 	// Allow shadowing (gg = gg.newcontext(); gg.draw_triangle())
-	if ((name == xP.mod && xP.table.known_mod(name)) || xP.import_table.known_alias(name)) && !xP.cur_fn.known_var(name) && !is_c {
+	if ((name == xP.mod && xP.table.known_mod(name)) || xP.import_table.known_alias(name)) && !xP.known_var(name) && !is_c {
 		mut mod := name
 		// must be aliased module
 		if name != xP.mod && xP.import_table.known_alias(name) {
@@ -1568,23 +1586,31 @@ fn (xP mut Parser) name_expr() string {
 		xP.fgen(name)
 		name = prepend_mod(mod, name)
 	}
-	else if !xP.table.known_type(name) && !xP.cur_fn.known_var(name) &&	!xP.table.known_fn(name) && !xP.table.known_const(name) && !is_c {
+	else if !xP.table.known_type(name) && !xP.known_var(name) && !xP.table.known_fn(name) && !xP.table.known_const(name) && !is_c {
 		name = xP.prepend_mod(name)
 	}
 	// Variable
 	for { // TODO remove
-	mut v := xP.find_var_check_new_var(name) or { break }
+	if name == '_' {
+		xP.error('cannot use `_` as value')
+	}
+	mut var := xP.find_var_check_new_var(name) or { break }
 	if ptr {
-		xP.gen('& /*v*/ ')
+		xP.gen('& /*var*/ ')
 	}
 	else if deref {
 		xP.gen('*')
 	}
-	mut typ := xP.var_expr(v)
+	if xP.pref.autofree && var.typ == 'string' && var.is_arg &&
+		xP.assigned_type == 'string' {
+		xP.warn('Setting moved ' + var.typ)
+		xP.mark_arg_moved(var)
+	}	
+	mut typ := xP.var_expr(var)
 	// *var
 	if deref {
 		if !typ.contains('*') && !typ.ends_with('ptr') {
-			println('name="$name", t=$v.typ')
+			println('name="$name", t=$var.typ')
 			xP.error('Dereferencing requires a pointer, but got `$typ`')
 		}
 		typ = typ.replace('ptr', '')// TODO
@@ -1595,9 +1621,9 @@ fn (xP mut Parser) name_expr() string {
 		typ += '*'
 	}
 	if xP.inside_return_expr {
-		//println('marking $v.name returned')
-		xP.mark_var_returned(v)
-		// v.is_returned = true // TODO modifying a local variable
+		//println('marking $var.name returned')
+		xP.mark_var_returned(var)
+		// var.is_returned = true // TODO modifying a local variable
 		// that's not used afterwards, this should be a compilation
 		// error
 	}	
@@ -1703,7 +1729,7 @@ fn (xP mut Parser) name_expr() string {
 				//f = xP.table.find_fn(name)
 			}
 			// Check for misspelled function / variable / module
-			suggested := xP.table.identify_typo(name, xP.cur_fn, xP.import_table)
+			suggested := xP.identify_typo(name, xP.import_table)
 			if suggested != '' {
 				xP.error('Undefined: `$name`. Did you mean:$suggested')
 			}
@@ -1743,7 +1769,7 @@ fn (xP mut Parser) name_expr() string {
 	if f.typ == 'void' && !xP.inside_if_expr {
 		// xP.error('`$f.name` used as value')
 	}
-	xP.log('calling function')
+	//xP.log('calling function')
 	xP.fn_call(f, 0, '', '')
 	// dot after a function call: `get_user().age`
 	if xP.tk == .DOT {
@@ -1754,7 +1780,7 @@ fn (xP mut Parser) name_expr() string {
 		}
 		return typ
 	}
-	xP.log('end of name_expr')
+	//xP.log('end of name_expr')
 	if f.typ.ends_with('*') {
 		xP.is_alloc = true
 	}
@@ -1762,9 +1788,11 @@ fn (xP mut Parser) name_expr() string {
 }
 
 fn (xP mut Parser) var_expr(var Var) string {
-	xP.log('\nvar_expr() var.name="$var.name" var.typ="$var.typ"')
+	//xP.log('\nvar_expr() var.name="$var.name" var.typ="$var.typ"')
 	// println('var expr is_tmp=$xP.cgen.is_tmp\n')
-	xP.mark_var_used(var)
+	if !var.is_const {
+		xP.mark_var_used(var)
+	}
 	fn_sh := xP.cgen.add_shadow()
 	xP.expr_var = var
 	xP.gen(xP.table.var_cgen_name(var.name))
@@ -1799,7 +1827,7 @@ fn (xP mut Parser) var_expr(var Var) string {
 		}
 		// println('dot #$dc')
 		typ = xP.dot(typ, fn_sh)
-		xP.log('typ after dot=$typ')
+		//xP.log('typ after dot=$typ')
 		// print('tk after dot()')
 		// xP.print_tk()
 		// dc++
@@ -2076,9 +2104,7 @@ fn (xP mut Parser) index_expr(typ_ string, fn_sh int) string {
 	// TODO move this from index_expr()
 	// TODO if xP.tk in ...
 	// if xP.tk in [.ASSIGN, .PLUS_ASSIGN, .MINUS_ASSIGN]
-	if (xP.tk == .ASSIGN && !xP.is_SqlX) || xP.tk == .PLUS_ASSIGN || xP.tk == .MINUS_ASSIGN || xP.tk == .SLASH_ASSIGN ||
-	xP.tk == .STAR_ASSIGN || xP.tk == .XOR_ASSIGN || xP.tk == .PER_ASSIGN || xP.tk == .OR_ASSIGN ||
-	xP.tk == .AND_ASSIGN || xP.tk == .AT_ASSIGN || xP.tk == .RIGHT_SHIFT_ASSIGN ||	xP.tk == .LEFT_SHIFT_ASSIGN {
+	if (xP.tk == .ASSIGN && !xP.is_SqlX) || xP.tk.is_assign() {
 		if is_indexer && is_str && !xP.builtin_mod {
 			xP.error('strings are immutable')
 		}
@@ -2185,8 +2211,14 @@ fn (xP mut Parser) expression() string {
 			if !xP.expr_var.is_changed {
 				xP.mark_var_changed(xP.expr_var)
 			}
+			xP.gen('/*typ = $typ   tmp_typ=$tmp_typ*/')
+			sh_clone := xP.cgen.add_shadow()
 			expr_type := xP.expression()
-			// Two arrays of the same type?
+			// Need to clone the string when appending it to an array?
+			if xP.pref.autofree && typ == 'array_string' && expr_type == 'string' {
+				xP.cgen.set_shadow(sh_clone, 'string_clone(')
+				xP.gen(')')
+			}
 			xP.gen_array_push(sh, typ, expr_type, tmp, tmp_typ)
 			return 'void'
 		}
@@ -2462,7 +2494,7 @@ fn (xP mut Parser) assoc() string {
 	// println('assoc()')
 	xP.next()
 	name := xP.check_name()
-	var := xP.cur_fn.find_var(name) or {
+	var := xP.find_var(name) or {
 		xP.error('unknown variable `$name`')
 		exit(1)
 	}
@@ -2598,7 +2630,7 @@ fn (xP mut Parser) string_expr() {
 			if fspec == 's' {
 				//println('custom str F=$cformat | format_specifier: "$fspec" | typ: $typ ')
 				if typ != 'string' {
-					xP.error('only UTxQ strings can be formatted with a :${cformat} format, but you have given "${val}", which has type ${typ}.')
+					xP.error('only UTxQ strings can be formatted with a :${cformat} format, but you have given "${val}", which has type ${typ}')
 				}
 				args = args.all_before_last('${val}.len, ${val}.str') + '${val}.str'
 			}
@@ -2650,7 +2682,7 @@ fn (xP mut Parser) string_expr() {
 		xP.gen('_STR_TMP($format$args)')
 	}
 	else {
-		// Otherwise do ugly len counting + allocation + sprintf
+		// Otherwise do len counting + allocation + sprintf
 		xP.gen('_STR($format$args)')
 	}
 }
@@ -3099,6 +3131,9 @@ fn (xP mut Parser) for_statement() {
 		i := xP.check_name()
 		xP.check(.COMMA)
 		val := xP.check_name()
+		if i == '_' && val == '_' {
+			xP.error('No new variables on the left side of `in`')
+		}
 		xP.fgen(' ')
 		xP.check(.key_in)
 		xP.fgen(' ')
@@ -3543,9 +3578,11 @@ fn (xP mut Parser) return_statement() {
 				xP.check(.COMMA)
 				types << xP.bool_expression()
 			}
+			mut cur_fn_typ_check := xP.cur_fn.typ
 			// Multiple returns
 			if types.len > 1 {
-				expr_type = 'MultiReturn_' + types.join('_Z_').replace('*', '_ZptrZ_')
+				expr_type = types.join(',')
+				cur_fn_typ_check = cur_fn_typ_check.replace('_UTXQ_MultiRet_', '').replace('_PTR_', '*').replace('_UTXQ_', ',')
 				ret_vals := xP.cgen.cur_line.right(sh)
 				mut ret_fields := ''
 				for ret_val_idx, ret_val in ret_vals.split(' ') {
@@ -3554,7 +3591,7 @@ fn (xP mut Parser) return_statement() {
 					}
 					ret_fields += '.var_$ret_val_idx=$ret_val'
 				}
-				xP.cgen.resetln('($expr_type){$ret_fields}')
+				xP.cgen.resetln('($xP.cur_fn.typ){$ret_fields}')
 			}
 			xP.inside_return_expr = false
 			// Automatically wrap an object inside an option if the function
@@ -3598,7 +3635,7 @@ fn (xP mut Parser) return_statement() {
 					xP.genln('return $tmp;')
 				}
 			}
-			xP.check_types(expr_type, xP.cur_fn.typ)
+			xP.check_types(expr_type, cur_fn_typ_check)
 		}
 	}
 	else {
@@ -3631,7 +3668,7 @@ fn (xP mut Parser) go_statement() {
 	// Method
 	if xP.peek() == .DOT {
 		var_name := xP.lit
-		var := xP.cur_fn.find_var(var_name) or { return }
+		var := xP.find_var(var_name) or { return }
 		xP.mark_var_used(var)
 		xP.next()
 		xP.check(.DOT)
@@ -3649,14 +3686,16 @@ fn (xP mut Parser) go_statement() {
 	}
 }
 
+/*
 fn (xP mut Parser) register_var(var Var) {
 	if var.line_no_y == 0 {
 		scpos := xP.scanner.get_scanner_pos()
-		xP.cur_fn.register_var({ var | scanner_pos: scpos, line_no_y: scpos.line_no_y })
+		xP.register_var({ var | scanner_pos: scpos, line_no_y: scpos.line_no_y })
 	} else {
-		xP.cur_fn.register_var(var)
+		xP.register_var(var)
 	}
 }
+*/
 
 // user:=json_decode(User, user_json_string)
 fn (xP mut Parser) json_decode() string {
@@ -3779,7 +3818,7 @@ fn (xP mut Parser) check_unused_imports() {
 	if output == '' { return }
 	output = '$xP.file_path: The following imports were never used:$output'
 	if xP.pref.is_prod {
-		cerror(output)
+		xQError(output)
 	} else {
 		println('warning: $output')
 	}

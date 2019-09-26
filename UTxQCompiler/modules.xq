@@ -45,7 +45,7 @@ fn (xQ &UTxQ) find_module_path(mod string) string {
 	if !os.dir_exists(import_path) {
 		import_path = '$ModPath/$mod_path'
 		if !os.dir_exists(import_path){
-			cerror('module "$mod" not found')
+			xQError('module "$mod" not found')
 		}
 	}
 	return import_path

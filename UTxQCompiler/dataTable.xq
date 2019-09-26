@@ -62,6 +62,7 @@ struct Var {
 mut:
 	typ             string
 	name            string
+	idx             int // Index in the local_vars array
 	is_arg          bool
 	is_const        bool
 	args            []Var // function args
@@ -79,7 +80,7 @@ mut:
 	is_changed      bool
 	scope_level     int
 	is_c            bool // Remove once `typ` is `Type`, not string
-	moved           bool
+	is_moved        bool
 	scanner_pos     ScannerPosX // TODO: Use only scanner_pos, remove line_no_y
 	line_no_y       int
 }
@@ -286,6 +287,7 @@ fn (t mut dataTable) register_const(name, typ, mod string) {
 		typ: typ
 		is_const: true
 		mod: mod
+		idx: -1
 	}
 }
 
@@ -298,6 +300,7 @@ fn (xQP mut Parser) register_global(name, typ string) {
 		is_global: true
 		mod: xQP.mod
 		is_mutable: true
+		idx: -1
 	}
 }
 
@@ -315,6 +318,10 @@ fn (table &dataTable) known_type(typ_ string) bool {
 	return t.name.len > 0 && !t.is_shadow
 }
 
+fn (table &dataTable) known_type_fast(t &Type) bool {
+	return t.name != '' && !t.is_shadow
+
+}
 
 fn (t &dataTable) find_fn(name string) ?Fn {
 	f := t.fns[name]
@@ -325,12 +332,12 @@ fn (t &dataTable) find_fn(name string) ?Fn {
 }
 
 fn (t &dataTable) known_fn(name string) bool {
-	_ := t.find_fn(name) or { return false }
+	_ = t.find_fn(name) or { return false }
 	return true
 }
 
 fn (t &dataTable) known_const(name string) bool {
-	_ := t.find_const(name) or { return false }
+	_ = t.find_const(name) or { return false }
 	return true
 }
 
@@ -381,7 +388,7 @@ fn (t mut dataTable) rewrite_type(typ Type) {
 fn (table mut dataTable) add_field(type_name, field_name, field_type string, is_mutable bool, attr string, access_mod AccessMod) {
 	if type_name == '' {
 		print_backtrace()
-		cerror('add_field: empty type')
+		xQError('add_field: empty type')
 	}
 	mut t := table.typesmap[type_name]
 	t.fields << Var {
@@ -396,7 +403,7 @@ fn (table mut dataTable) add_field(type_name, field_name, field_type string, is_
 }
 
 fn (t &Type) has_field(name string) bool {
-	_ := t.find_field(name) or { return false }
+	_ = t.find_field(name) or { return false }
 	return true
 }
 
@@ -414,7 +421,7 @@ fn (t &Type) find_field(name string) ?Var {
 }
 
 fn (table &dataTable) type_has_field(typ &Type, name string) bool {
-	_ := table.find_field(typ, name) or { return false }
+	_ = table.find_field(typ, name) or { return false }
 	return true
 }
 
@@ -441,7 +448,7 @@ fn (xP mut Parser) add_method(type_name string, f Fn) {
 	}
 	if type_name == '' {
 		print_backtrace()
-		cerror('add_method: empty type')
+		xQError('add_method: empty type')
 	}
 	// TODO table.typesmap[type_name].methods << f
 	mut t := xP.table.typesmap[type_name]
@@ -457,12 +464,12 @@ fn (xP mut Parser) add_method(type_name string, f Fn) {
 }
 
 fn (t &Type) has_method(name string) bool {
-	_ := t.find_method(name) or { return false }
+	_ = t.find_method(name) or { return false }
 	return true
 }
 
 fn (table &dataTable) type_has_method(typ &Type, name string) bool {
-	_ := table.find_method(typ, name) or { return false }
+	_ = table.find_method(typ, name) or { return false }
 	return true
 }
 
@@ -755,7 +762,7 @@ fn (t &dataTable) fn_gen_types(fn_name string) []string {
 			return f.types
 		}
 	}
-  cerror('function $fn_name not found')
+  xQError('function $fn_name not found')
 	return []string
 }
 
@@ -862,7 +869,7 @@ fn (pit mut ParsedImportsTable) register_alias(alias string, mod string) {
 	// NOTE: Come back here
 	// if alias in pit.imports && pit.imports[alias] == mod {}
 	if alias in pit.imports && pit.imports[alias] != mod {
-		cerror('Cannot import $mod as $alias: import name $alias already in use in "${pit.file_path}".')
+		xQError('Cannot import $mod as $alias: import name $alias already in use in "${pit.file_path}"')
 	}
 	if mod.contains('.internal.') {
 		mod_parts := mod.split('.')
@@ -873,7 +880,7 @@ fn (pit mut ParsedImportsTable) register_alias(alias string, mod string) {
 		}
 		internal_parent := internal_mod_parts.join('.')
 		if !pit.module_name.starts_with(internal_parent) {
-			cerror('module $mod can only be imported internally by libraries.')
+			xQError('module $mod can only be imported internally by libraries')
 		}
 	}
 	pit.imports[alias] = mod
@@ -919,24 +926,24 @@ fn (t &Type) contains_field_type(typ string) bool {
 }
 
 // Check for a function / variable / module typo in `name`
-fn (table &dataTable) identify_typo(name string, current_fn &Fn, pit &ParsedImportsTable) string {
+fn (xP &Parser) identify_typo(name string, pit &ParsedImportsTable) string {
 	// Dont check if name is too short
 	if name.len < 2 { return '' }
 	min_match := 0.50 // for dice coefficient between 0.0 - 1.0
 	name_orig := name.replace('__', '.').replace('_dot_', '.')
 	mut output := ''
 	// Check functions
-	mut n := table.find_misspelled_fn(name, pit, min_match)
+	mut n := xP.table.find_misspelled_fn(name, pit, min_match)
 	if n != '' {
 		output += '\n  * function: `$n`'
 	}
 	// Check function local variables
-	n = current_fn.find_misspelled_local_var(name_orig, min_match)
+	n = xP.find_misspelled_local_var(name_orig, min_match)
 	if n != '' {
 		output += '\n  * variable: `$n`'
 	}
 	// Check imported modules
-	n = table.find_misspelled_imported_mod(name_orig, pit, min_match)
+	n = xP.table.find_misspelled_imported_mod(name_orig, pit, min_match)
 	if n != '' {
 		output += '\n  * module: `$n`'
 	}

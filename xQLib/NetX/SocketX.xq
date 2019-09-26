@@ -209,7 +209,7 @@ public fn dial(address string, port int) ?Socket {
 }
 
 // Send string data to socket
-public fn (s Socket) send(buf byteptr, len int) int? {
+public fn (s Socket) send(buf byteptr, len int) ?int {
 	res := int( C.send(s.sockfd, buf, len, 0) )
 	if res < 0 {
 		return error('socket: send failed')

@@ -40,12 +40,12 @@ mut:
 fn new_scanner(file_path string) &Scanner {
   // Check if file exists
   if !os.file_exists(file_path) {
-		cerror('"$file_path" doesn\'t exist')
+		xQError('"$file_path" doesn\'t exist')
 	}
 
   // Check if file is readable
 	mut raw_text := os.read_file(file_path) or {
-		cerror('scanner: failed to open "$file_path"')
+		xQError('scanner: failed to open "$file_path"')
 		return 0
 	}
 
@@ -60,16 +60,12 @@ fn new_scanner(file_path string) &Scanner {
 		}
 	}
 
-	text := raw_text
-
-	scanner := &Scanner {
+	return &Scanner {
 		file_path: file_path
-		text: text
+		text: raw_text
 		format_out: StringX.new_builder(1000)
 		should_print_line_on_error: true
 	}
-
-	return scanner
 }
 
 struct ScannerPosX {
@@ -695,6 +691,7 @@ fn (sc &Scanner) error(message string) {
 	// and jump to their source with a keyboard shortcut.
 	// Using only the filename leads to inability of IDE/editors
 	// to find the source file, when it is in another folder.
+	//println('${sc.file_path}:${sc.line_no_y + 1}:${column+1}: $msg')
 	println('${fullpath}:${sc.line_no_y + 1}:${column+1}: $message')
 	exit(1)
 }

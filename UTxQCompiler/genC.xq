@@ -72,6 +72,34 @@ fn (xP mut Parser) gen_fn_decl(f Fn, typ, str_args string) {
 	xP.genln('$dll_export_linkage$typ $fn_name_cgen($str_args) {')
 }
 
+// Blank identifer assignment `_ = 101` 
+fn (xP mut Parser) gen_blank_identifier_assign() {
+	xP.next()
+	xP.check(.ASSIGN)
+	pos := xP.cgen.add_shadow()
+	mut typ := xP.bool_expression()
+	tmp := xP.get_tmp()
+	// Handle or
+	if xP.tk == .key_or_else {
+		xP.cgen.set_shadow(pos, '$typ $tmp = ')
+		xP.genln(';')
+		typ = typ.replace('Option_', '')
+		xP.next()
+		xP.check(.LCBR)
+		xP.genln('if (!$tmp .ok) {')
+		xP.register_var(Var {
+			name: 'err'
+			typ: 'string'
+			is_mutable: false
+			is_used: true
+		})
+		xP.genln('string err = $tmp . error;')
+		xP.statements()
+		xP.returns = false
+	}
+	xP.gen(';')
+}
+
 fn types_to_c(types []Type, table &dataTable) string {
 	mut sb := StringX.new_builder(10)
 	for t in types {
@@ -455,22 +483,23 @@ fn type_default(typ string) string {
 	return '{0}'
 }
 
-fn (xP mut Parser) gen_array_push(sh int, typ, expr_type, tmp, tmp_typ string) {
+fn (xP mut Parser) gen_array_push(sh int, typ, expr_type, tmp, elem_type string) {
+	// Two arrays of the same type?
 	push_array := typ == expr_type
 	if push_array {
 		xP.cgen.set_shadow(sh, '_PUSH_MANY(&' )
 		xP.gen('), $tmp, $typ)')
-	}  else {
-		xP.check_types(expr_type, tmp_typ)
+	} else {
+		xP.check_types(expr_type, elem_typ)
 		// Pass tmp var info to the _PUSH macro
 		// Prepend tmp initialisation and push call
 		// Don't dereference if it's already a mutable array argument  (`fn foo(mut []int)`)
 		push_call := if typ.contains('*'){'_PUSH('} else { '_PUSH(&'}
 		xP.cgen.set_shadow(sh, push_call)
-		if tmp_typ.ends_with('*') {
-			xP.gen('), $tmp, ${tmp_typ.left(tmp_typ.len - 1)})')
+		if elem_typ.ends_with('*') {
+			xP.gen('), $tmp, ${elem_typ.left(elem_typ.len - 1)})')
 		} else {
-			xP.gen('), $tmp, $tmp_typ)')
+			xP.gen('), $tmp, $elem_typ)')
 		}
 	}
 }

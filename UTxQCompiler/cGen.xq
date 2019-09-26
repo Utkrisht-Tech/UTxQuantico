@@ -260,7 +260,7 @@ fn build_thirdParty_obj_file(path string, modFlags []CFlag) {
 	cmd := '$cc $cc_thirdparty_options $btarget -c -o "$obj_path" $cfiles $atarget '
 	res := os.exec(cmd) or {
 		println('failed thirdParty object build cmd: $cmd')
-		cerror(err)
+		xQError(err)
 		return
 	}
 	println(res.output)
@@ -279,7 +279,7 @@ fn os_name_to_ifdef(name string) string {
 		case 'android': return '__BIONIC__'
 		case 'js': return '_XQJS'
 	}
-	cerror('bad os ifdef name "$name"')
+	xQError('bad os ifdef name "$name"')
 	return ''
 }
 
@@ -291,7 +291,7 @@ fn platform_postfix_to_ifdefguard(name string) string {
 		case '_lin.xq': return '#ifdef __linux__'
 		case '_mac.xq': return '#ifdef __APPLE__'
   }
-	cerror('bad platform_postfix "$name"')
+	xQError('bad platform_postfix "$name"')
 	return ''
 }
 
@@ -344,10 +344,10 @@ fn sort_structs(types []Type) []Type {
 		// add type and dependant types to graph
 		dep_graph.add(t.name, field_deps)
 	}
-	// sort graph
+	// Sort graph
 	dep_graph_sorted := dep_graph.resolve()
 	if !dep_graph_sorted.acyclic {
-		cerror('error: cgen.sort_structs() DGNAC.\nplease create a new issue here: https://github.com/Utkrisht-Tech/UTxQuantico/issues and tag @UTx10101')
+		xQError('Error: cgen.sort_structs() DGNAC.\nplease create a new issue here: https://github.com/Utkrisht-Tech/UTxQuantico/issues and tag @UTx10101')
 	}
 	// sort types
 	mut types_sorted := []Type

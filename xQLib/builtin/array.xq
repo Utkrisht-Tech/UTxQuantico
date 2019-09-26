@@ -36,6 +36,9 @@ public fn _make(inpLen, cap, elem_size int) array {
 
 // Private function, used by UTxQ (`nums := [1, 2, 3]`)
 fn new_array_from_c_array(inpLen, cap, elem_size int, c_array voidptr) array {
+	a := 3
+	_ = a
+	//println(a)
 	arr := array {
 		len: inpLen
 		cap: cap

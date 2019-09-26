@@ -23,7 +23,7 @@ fn SqlX_params2params_gen(SqlX_params []string, SqlX_types []string, qprefix str
 			}else if paramtype == 'string' {
 				params_gen += '${qprefix}params[$i] = ${param}.str;\n'
 			}else{
-				cerror('orm: only int and string variable types are supported in queries')
+				xQError('ORM: Only int and string variable types are supported in queries')
 			}
 		}
 	}
@@ -84,7 +84,7 @@ fn (xP mut Parser) select_query(fn_sh int) string {
 		if field.typ != 'string' && field.typ != 'int' {
 			continue
 		}
-		xP.cur_fn.register_var({ field | is_used:true })
+		xP.register_var({ field | is_used:true })
 	}
 	q += table_name
 	// `where` statement
@@ -194,7 +194,7 @@ fn (xP mut Parser) insert_query(fn_sh int) {
 	xP.check(.LPAR)
 	var_name := xP.check_name()
 	xP.check(.RPAR)
-	var := xP.cur_fn.find_var(var_name) or { return }
+	var := xP.find_var(var_name) or { return }
 	typ := xP.table.find_type(var.typ)
 	mut fields := []Var
 	for i, field in typ.fields {

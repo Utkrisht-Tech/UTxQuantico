@@ -150,15 +150,15 @@ fn (xP mut Parser) chash() {
 		// expand `@XQROOT` `@XQMOD` to absolute path
 		flag = flag.replace('@XQROOT', xP.xQRoot)
 		flag = flag.replace('@XQMOD', ModPath)
-		xP.log('adding flag "$flag"')
+		//xP.log('adding flag "$flag"')
 		xP.table.parse_cflag(flag, xP.mod)
 		return
 	}
 	if hash.starts_with('include') {
 		if xP.first_cp() && !is_sig {
-			if xP.file_xPcguard.len != 0 {
-				//println('xP: $xP.file_platform $xP.file_xPcguard')
-				xP.cgen.includes << '$xP.file_xPcguard\n#$hash\n#endif'
+			if xP.file_xPCguard.len != 0 {
+				//println('xP: $xP.file_platform $xP.file_xPCguard')
+				xP.cgen.includes << '$xP.file_xPCguard\n#$hash\n#endif'
 				return
 			}
 			xP.cgen.includes << '#$hash'

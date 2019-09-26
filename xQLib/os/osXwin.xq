@@ -135,7 +135,7 @@ public fn get_module_filename(handle HANDLE) ?string {
             return _filename
         default:
             // Must handled with GetLastError and converted by FormatMessage
-            return error('Cannot get file name from handle.')
+            return error('Cannot get file name from handle')
         }
     }
     panic('This should be unreachable') // TODO remove unreachable after loop

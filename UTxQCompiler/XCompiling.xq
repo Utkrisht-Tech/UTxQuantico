@@ -130,7 +130,7 @@ fn (xQ mut UTxQ) XCompiler() {
 	// Output executable name
 	a << '-o "$xQ.out_name"'
 	if os.dir_exists(xQ.out_name) {
-		cerror('\'$xQ.out_name\' is a directory')
+		xQError('\'$xQ.out_name\' is a directory')
 	}
 	// macOS code can include objective C  TODO remove once objective C is replaced with C
 	if xQ.os == .mac {
@@ -177,12 +177,12 @@ fn (xQ mut UTxQ) XCompiler() {
 		println(cmd)
 	}
 	ticks := time.ticks()
-	res := os.exec(cmd) or { cerror(err) return }
+	res := os.exec(cmd) or { xQError(err) return }
 	if res.exit_code != 0 {
 
 		if res.exit_code == 127 {
 			// the command could not be found by the system
-			cerror('C compiler error, while attempting to run: \n' +
+			xQError('C compiler error, while attempting to run: \n' +
 				'-----------------------------------------------------------\n' +
 				'$cmd\n' +
 				'-----------------------------------------------------------\n' +
@@ -201,7 +201,7 @@ fn (xQ mut UTxQ) XCompiler() {
 				println('')
 			}
 		}
-		cerror('C error. This should never happen. ' +
+		xQError('C error. This should never happen. ' +
 			'Please create a GitHub issue: https://github.com/Utkrisht-Tech/UTxQuantico/issues/new/choose')
 	}
 	diff := time.ticks() - ticks
@@ -225,7 +225,7 @@ fn (xQ mut UTxQ) XCompiler() {
 		obj_file +
 		' /usr/lib/x86_64-linux-gnu/libc.so ' +
 		'/usr/lib/x86_64-linux-gnu/crtn.o') or {
-			cerror(err)
+			xQError(err)
 			return
 		}
 		println(ress.output)

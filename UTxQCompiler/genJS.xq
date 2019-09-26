@@ -37,6 +37,15 @@ fn (xP mut Parser) gen_fn_decl(f Fn, typ, _str_args string) {
 	}
 }
 
+fn (xP mut Parser) gen_blank_identifier_assign() {
+	typ := xP.bool_expression()
+	or_else := xP.tk == .key_or_else
+	//tmp := xP.get_tmp()
+	if or_else {
+		//panic('optionals todo')
+	}
+}
+
 fn types_to_c(types []Type, table &dataTable) string {
 	mut sb := StringX.new_builder(10)
 	for t in types {
