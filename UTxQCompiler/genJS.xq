@@ -38,6 +38,8 @@ fn (xP mut Parser) gen_fn_decl(f Fn, typ, _str_args string) {
 }
 
 fn (xP mut Parser) gen_blank_identifier_assign() {
+	xP.check_name()
+	xP.check_space(.ASSIGN)
 	typ := xP.bool_expression()
 	or_else := xP.tk == .key_or_else
 	//tmp := xP.get_tmp()

@@ -20,8 +20,9 @@ mut:
 	text                    string
 	pos_x                   int         // x - coordinate of Scanner
 	line_no_y               int         // y - coordinate of Scanner
+	last_newline_pos		int // To calculating column
 	is_in_string            bool
-	interpol_start          bool // for hacky string interpolation TODO simplify
+	interpol_start          bool // For hacky string interpolation TODO simplify
 	interpol_end            bool
 	is_debug                bool
 	line_comment            string
@@ -37,15 +38,16 @@ mut:
 	str_denoter				byte 	// Quote used to denote current string: ' or "
 }
 
-fn new_scanner(file_path string) &Scanner {
-  // Check if file exists
-  if !os.file_exists(file_path) {
-		xQError('"$file_path" doesn\'t exist')
+// New Scanner from file.
+fn new_scanner_file(file_path string) &Scanner {
+	// Check if file exists
+	if !os.file_exists(file_path) {
+		xQError("$file_path doesn't exist")
 	}
-
-  // Check if file is readable
+	
+	// Check if file is readable
 	mut raw_text := os.read_file(file_path) or {
-		xQError('scanner: failed to open "$file_path"')
+		xQError('Scanner: Failed to open $file_path')
 		return 0
 	}
 
@@ -59,10 +61,16 @@ fn new_scanner(file_path string) &Scanner {
 			raw_text = tos(c_text[offset_ln], xQStrlen(c_text) - offset_ln)
 		}
 	}
+	mut sc := new_scanner(raw_text)
+	sc.file_path = file_path
 
+	return sc
+}
+
+// New Scanner from string.
+fn new_scanner(text string) &Scanner {
 	return &Scanner {
-		file_path: file_path
-		text: raw_text
+		text: text
 		format_out: StringX.new_builder(1000)
 		should_print_line_on_error: true
 	}
@@ -243,7 +251,8 @@ fn (sc Scanner) line_end() bool {
 fn (sc mut Scanner) skip_whitespace() {
 	for sc.pos_x < sc.text.len && sc.text[sc.pos_x].is_white() {
 		// Count \r\n as one line
-		if is_NEWLINE(sc.text[sc.pos_x]) && !sc.expect('\r\n', sc.pos_x-1) {
+		if is_newline(sc.text[sc.pos_x]) && !sc.expect('\r\n', sc.pos_x-1) {
+			sc.last_newline_pos = sc.pos_x
 			sc.line_no_y++
 		}
 		sc.pos_x++
@@ -665,9 +674,13 @@ fn (sc &Scanner) current_column() int {
 }
 
 fn (sc &Scanner) error(message string) {
+	sc.error_with_column(msg, 0)
+}
+
+fn (sc &Scanner) error_with_column(msg string, col int) {
+	column := col-1
 	linestart := sc.find_current_line_start_position()
 	lineend := sc.find_current_line_end_position()
-	column := sc.pos_x - linestart
 	if sc.should_print_line_on_error && lineend > linestart {
 		line := sc.text.substr( linestart, lineend )
 		// The pointerline should have the same spaces/tabs as the offending
@@ -685,6 +698,7 @@ fn (sc &Scanner) error(message string) {
 		println(pointerline)
 	}
 	fullpath := os.realpath( sc.file_path )
+	_ = fullpath
 	// The filepath:line:col: format is the default C compiler
 	// error output format. It allows editors and IDE's like
 	// emacs to quickly find the errors in the output
@@ -697,14 +711,14 @@ fn (sc &Scanner) error(message string) {
 }
 
 fn (sc Scanner) count_symbol_before(p int, sym byte) int {
-  mut count := 0
-  for i:=p; i>=0; i-- {
-    if sc.text[i] != sym {
-      break
-    }
-    count++
-  }
-  return count
+	mut count := 0
+	for i:=p; i>=0; i-- {
+		if sc.text[i] != sym {
+			break
+		}
+		count++
+	}
+	return count
 }
 
 // println('array out of bounds $idx len=$a.len')
@@ -810,26 +824,6 @@ fn (sc mut Scanner) identify_char() string {
 	return if ch == '\'' { '\\' + ch } else { ch }
 }
 
-fn (sc mut Scanner) peek() Token {
-	// save scanner state
-	pos := sc.pos_x
-	line := sc.line_no_y
-	is_in_string := sc.is_in_string
-	interpol_start := sc.interpol_start
-	interpol_end := sc.interpol_end
-
-	res := sc.scan()
-	tk := res.tk
-
-	// restore scanner state
-	sc.pos_x = pos
-	sc.line_no_y = line
-	sc.is_in_string = is_in_string
-	sc.interpol_start = interpol_start
-	sc.interpol_end = interpol_end
-	return tk
-}
-
 fn (sc &Scanner) expect(want string, start_pos int) bool {
 	end_pos := start_pos + want.len
 	if start_pos < 0 || start_pos >= sc.text.len {
@@ -875,58 +869,12 @@ fn is_name_char(ch byte) bool {
 	return ch.is_letter() || ch == `_`
 }
 
-fn is_NEWLINE(ch byte) bool {
+fn is_newline(ch byte) bool {
 	return ch == `\r` || ch == `\n`
 }
 
-fn (sc &Scanner) get_opening_bracket() int {
-	mut pos := sc.pos_x
-	mut parentheses := 0
-	mut is_in_string := false
-
-	for pos > 0 && sc.text[pos] != `\n` {
-		if sc.text[pos] == `)` && !is_in_string {
-			parentheses++
-		}
-		if sc.text[pos] == `(` && !is_in_string {
-			parentheses--
-		}
-		if sc.text[pos] == `\'` && sc.text[pos - 1] != `\\` && sc.text[pos - 1] != `\`` {
-			// ` // apostrophe balance comment. do not remove
-			is_in_string = !is_in_string
-		}
-		if parentheses == 0 {
-			break
-		}
-		pos--
-	}
-	return pos
-}
-
-// Foo { bar: 3, baz: 'hi' } => '{ bar: 3, baz: "hi" }'
-fn (sc mut Scanner) create_type_string(T Type, name string) {
-	line := sc.line_no_y
-	is_in_string := sc.is_in_string
-	mut newtext := '\'{ '
-	start_pos := sc.get_opening_bracket() + 1
-	end_pos := sc.pos_x
-	for i, field in T.fields {
-		if i != 0 {
-			newtext += ', '
-		}
-		newtext += '$field.name: ' + '$${name}.${field.name}'
-	}
-	newtext += ' }\''
-	sc.text = sc.text.substr(0, start_pos) + newtext + sc.text.substr(end_pos, sc.text.len)
-	sc.pos_x = start_pos - 2
-	sc.line_no_y = line
-	sc.is_in_string = is_in_string
-}
-
 fn contains_capital(s string) bool {
-	// for ch in s {
-	for i := 0; i < s.len; i++ {
-		ch := s[i]
+	for ch in s {
 		if ch >= `A` && ch <= `Z` {
 			return true
 		}

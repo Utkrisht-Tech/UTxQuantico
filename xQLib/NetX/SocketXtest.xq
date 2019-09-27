@@ -6,17 +6,14 @@ import NetX
 
 fn testXsocket() {
 	mut server := NetX.listen(0) or {
-		println(err)
-		return
+		panic(err)
 	}
 	server_port := server.get_port()
 	mut client := NetX.dial('127.0.0.1', server_port) or {
-		println(err)
-		return
+		panic(err)
 	}
 	mut socket := server.accept() or {
-		println(err)
-		return
+		panic(err)
 	}
 
 	message := 'Hello World'

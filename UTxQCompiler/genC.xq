@@ -74,8 +74,8 @@ fn (xP mut Parser) gen_fn_decl(f Fn, typ, str_args string) {
 
 // Blank identifer assignment `_ = 101` 
 fn (xP mut Parser) gen_blank_identifier_assign() {
-	xP.next()
-	xP.check(.ASSIGN)
+	xP.check_name()
+	xP.check_space(.ASSIGN)
 	pos := xP.cgen.add_shadow()
 	mut typ := xP.bool_expression()
 	tmp := xP.get_tmp()

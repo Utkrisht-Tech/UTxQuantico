@@ -9,18 +9,32 @@ import StringX
 
 struct dataTable {
 mut:
-	modules                []string // List of all modules registered by the application
-	imports                []string // List of all imported libraries
-	typesmap               map[string]Type
-	consts                 []Var
-	fns                    map[string]Fn
-	generic_fns            []GenFnTable //map[string]GenFnTable // generic_fns['listen_and_serve'] == ['Blog', 'Forum']
-	file_imports           map[string]ParsedImportsTable // List of file Imports scoped to the parsed file
-	cflags                 []CFlag //  ['-framework DotNet', '-WebGL']
-	fn_count               int // atomic
-	is_obfuscated          bool
-	obf_ids                map[string]int
+	modules				[]string // List of all modules registered by the application
+	imports				[]string // List of all imported libraries
+	typesmap			map[string]Type
+	consts				[]Var
+	fns					map[string]Fn
+	generic_fns			[]GenFnTable //map[string]GenFnTable // generic_fns['listen_and_serve'] == ['Blog', 'Forum']
+	file_imports		map[string]ParsedImportsTable // List of file Imports scoped to the parsed file
+	cflags				[]CFlag //  ['-framework DotNet', '-WebGL']
+	fn_count			int // atomic
+	is_obfuscated		bool
+	obf_ids				map[string]int
+	//names				[]Name
 }
+
+/*
+enum NameCategory {
+	constant
+	mod
+	var
+	typ
+}
+
+struct Name {
+	cat NameCategory
+}	
+*/
 
 struct GenFnTable {
 	fn_name string
@@ -838,14 +852,14 @@ fn (table &dataTable) qualify_module(mod string, file_path string) string {
 	return mod
 }
 
-fn (table &dataTable) get_file_import_table(file_path string) ParsedImportsTable {
+fn (table &dataTable) get_file_import_table(id string) ParsedImportsTable {
 	// if file_path.clone() in table.file_imports {
 	// 	return table.file_imports[file_path.clone()]
 	// }
 	// Just get imports. memory error when recycling import table
-	mut pit := new_parsed_imports_table(file_path)
-	if file_path in table.file_imports {
-		pit.imports = table.file_imports[file_path].imports
+	mut pit := new_parsed_imports_table(id)
+	if id in table.file_imports {
+		pit.imports = table.file_imports[id].imports
 	}
 	return pit
 }

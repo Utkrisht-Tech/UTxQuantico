@@ -7,9 +7,21 @@ module main
 import (
 	os
 	StringX
+	CryptoX.sha1
 )
 
+// TODO rename to Token
+// TODO rename enum Token to TokenType
+struct Tok {
+	tk			Token
+	lit			string
+	line_num	int
+	name_idx	int // Name table index hash
+	column		int
+}
+
 struct Parser {
+	id							string // Unique id. if parsing file will be same as file_path
 	file_path					string // "/home/user/hello.xq"
 	file_name					string // "hello.xq"
 	file_platform				string // ".xq", "_win.xq", "_nix.xq", "_mac.xq", "_lin.xq" ...
@@ -21,7 +33,7 @@ struct Parser {
 	pref						&Preferences // Preferences shared from UTxQ struct
 mut:
 	scanner						&Scanner
-	// tokens					[]Token // TODO cache all tokens, right now they have to be scanned twice
+	tokens						[]Tok
 	token_idx					int
 	tk							Token
 	prev_tk						Token
@@ -83,7 +95,22 @@ const (
 	MaxModuleDepth = 4
 )
 
-fn (xQ mut UTxQ) new_parser(path string) Parser {
+// New Parser from string. parser id will be hash of string
+fn (xQ mut UTxQ) new_parser_string(text string) Parser {
+	return xQ.new_parser_string_id(text, sha1.hexhash(text))
+}
+
+// New Parser from string. with id specified in `id`
+fn (xQ mut UTxQ) new_parser_string_id(text string, id string) Parser {
+	mut xP := xQ.new_parser(new_scanner(text), id)
+	xP.import_table = xQ.table.get_file_import_table(id)
+	xP.scan_tokens()
+	xQ.add_parser(xP)
+	return xP
+}
+
+// New Parser from file.
+fn (xQ mut UTxQ) new_parser_file(path string) Parser {
 	//println('new_parser("$path")')
 	mut path_xPCguard := ''
 	mut path_platform := '.xq'
@@ -95,18 +122,32 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 		}
 	}
 
+	mut xP := xQ.new_parser(new_scanner_file(path), path)
+	xP = { xP|
+		file_path: path,
+		file_name: path.all_after('/'),
+		file_platform: path_platform,
+		file_xPCguard: path_xPCguard,
+		import_table: xQ.table.get_file_import_table(path),
+		is_script: (xQ.pref.is_script && path == xQ.dir)
+	}
+	xQ.cgen.file = path
+	xP.scan_tokens()
+	//xP.scanner.debug_tokens()
+	xQ.add_parser(xP)
+
+	return xP
+}
+
+fn (xQ mut UTxQ) new_parser(scanner &Scanner, id string) Parser {
 	mut xP := Parser {
+		id: id
+		scanner: scanner
 		xQ: xQ
-		file_path: path
-		file_name: path.all_after('/')
-		file_platform: path_platform
-		file_xPCguard: path_xPCguard
-		scanner: new_scanner(path)
 		table: xQ.table
-		import_table: xQ.table.get_file_import_table(path)
 		cur_fn: EmptyFn
 		cgen: xQ.cgen
-		is_script: (xQ.pref.is_script && path == xQ.dir)
+		is_script: false
 		pref: xQ.pref
 		os: xQ.os
 		xQRoot: xQ.xQRoot
@@ -116,17 +157,27 @@ fn (xQ mut UTxQ) new_parser(path string) Parser {
 	$if js {
 		xP.is_js = true
 	}
-
 	if xP.pref.is_repl {
 		xP.scanner.should_print_line_on_error = false
 	}
-
 	xQ.cgen.line_directives = xQ.pref.is_debuggable
-	xQ.cgen.file = path
+	// xQ.cgen.file = path
+	return p
+}
 
-	xP.next()
-	// xP.scanner.debug_tokens()
-	return xP
+fn (xP mut Parser) scan_tokens() {
+	for {
+		res := xP.scanner.scan()
+		xP.tokens << Tok {
+			tk: res.tk
+			lit: res.lit
+			line_num: xP.scanner.line_no_y
+			column: xP.scanner.pos_x - xP.scanner.last_newline_pos
+		}
+		if res.tk == .EOF {
+			break
+		}
+	}
 }
 
 fn (xP mut Parser) set_current_fn(f Fn) {
@@ -139,9 +190,32 @@ fn (xP mut Parser) next() {
 	xP.prev_tk2 = xP.prev_tk
 	xP.prev_tk = xP.tk
 	xP.scanner.prev_tk = xP.tk
-	res := xP.scanner.scan()
+	if xP.token_idx >= xP.tokens.len {
+		xP.tk = Token.EOF
+		xP.lit = ''
+		return
+	}
+	res := xP.tokens[xP.token_idx]
+	xP.token_idx++
 	xP.tk = res.tk
 	xP.lit = res.lit
+	xP.scanner.line_no_y = res.line_num
+ }
+
+fn (xP & Parser) peek() Token {
+	if xP.token_idx >= xP.tokens.len - 2 {
+		return Token.EOF
+	}
+	tk := xP.tokens[xP.token_idx]
+	return tk.tk
+}
+
+fn (xP &Parser) peek_token() Tok {
+	if xP.token_idx >= xP.tokens.len - 2 {
+		return Tok{tk:Token.EOF}
+	}
+	tk := xP.tokens[xP.token_idx]
+	return tk
 }
 
 fn (xP &Parser) log(s string) {
@@ -155,6 +229,8 @@ fn (xP &Parser) log(s string) {
 
 fn (xP mut Parser) parse(cp CheckPoint) {
 	xP.cp = cp
+	xP.token_idx = 0
+	xP.next()
 	//xP.log('\nparse() run=$xP.cp file=$xP.file_name tk=${xP.strtk()}')// , "script_file=", script_file)
 	// `module main` is not required if it's a single file program
 	if xP.is_script || xP.pref.is_test {
@@ -188,8 +264,8 @@ fn (xP mut Parser) parse(cp CheckPoint) {
 		if 'builtin' in xP.table.imports {
 			xP.error('module `builtin` cannot be imported')
 		}
-		// save Parsed imports table
-		xP.table.file_imports[xP.file_path] = xP.import_table
+		// Save Parsed Imports Table
+		xP.table.file_imports[xP.id] = xP.import_table
 		return
 	}
 	// Go through every top level token or throw a compilation error if a non-top level token is met
@@ -353,7 +429,7 @@ fn (xP mut Parser) import_statement() {
 	if xP.tk != .NAME {
 		xP.error('bad import format')
 	}
-	if xP.peek() == .NUMBER && xP.scanner.text[xP.scanner.pos_x + 1] == `.` {
+	if xP.peek() == .NUMBER { // && xP.scanner.text[xP.scanner.pos_x + 1] == `.` {
 		xP.error('bad import format. module/submodule names cannot begin with a number')
 	}
 	mut mod := xP.check_name().trim_space()
@@ -474,6 +550,7 @@ fn (xP mut Parser) interface_method(field_name, receiver string) &Fn {
 	//xP.log('is interface. field=$field_name run=$xP.cp')
 	xP.fn_args(mut method)
 	if xP.scanner.has_gone_over_line_end() {
+	//if xP.prev_tk.line_no_y != xP.tk.line_no_y {
 		method.typ = 'void'
 	} else {
 		method.typ = xP.get_type()// method return type
@@ -772,15 +849,18 @@ fn (xP mut Parser) check(expected Token) {
 		print_backtrace()
 		xP.error(s)
 	}
+	/*
 	if expected == .RCBR {
 		xP.format_dec()
 	}
 	xP.fgen(xP.strtk())
 	// xQFmt: increase indentation on `{` unless it's `{}`
+	// TODO
 	if expected == .LCBR && xP.scanner.pos_x + 1 < xP.scanner.text.len && xP.scanner.text[xP.scanner.pos_x + 1] != `}` {
 		xP.fgenln('')
 		xP.format_inc()
 	}
+	*/
 	xP.next()
 
 if xP.scanner.line_comment != '' {
@@ -821,7 +901,7 @@ fn (xP mut Parser) error(s string) {
 		println('cp=$xP.cp fn=`$xP.cur_fn.name`\n')
 	}
 	xP.cgen.save()
-	// UTxQ git pull hint
+	// UTxQ up hint
 	cur_path := os.getwd()
 	if !xP.pref.is_repl && !xP.pref.is_test && ( xP.file_path.contains('UTxQ/UTxQCompiler') || cur_path.contains('UTxQ/UTxQCompiler') ){
 		println('\n=========================')
@@ -838,7 +918,8 @@ fn (xP mut Parser) error(s string) {
 	}
 	// xP.scanner.debug_tokens()
 	// Print `[]int` instead of `array_int` in errors
-	xP.scanner.error(s.replace('array_', '[]').replace('__', '.').replace('Option_', '?'))
+	err := s.replace('array_', '[]').replace('__', '.').replace('Option_', '?').replace('main.', '')
+	xP.scanner.error_with_column(err, xP.tokens[xP.token_idx-1].column)
 }
 
 fn (xP &Parser) first_cp() bool {
@@ -1571,13 +1652,12 @@ fn (xP mut Parser) name_expr() string {
 	}
 	// //////////////////////////
 	// module ?
-	// Allow shadowing (gg = gg.newcontext(); gg.draw_triangle())
-	if ((name == xP.mod && xP.table.known_mod(name)) || xP.import_table.known_alias(name)) && !xP.known_var(name) && !is_c {
+	if xP.peek() == .DOT && ((name == xP.mod && xP.table.known_mod(name)) || xP.import_table.known_alias(name))	&& !is_c && !xP.known_var(name)	// Allow shadowing (`gg = gg.newcontext(); gg.foo()`) {
 		mut mod := name
 		// must be aliased module
 		if name != xP.mod && xP.import_table.known_alias(name) {
 			xP.import_table.register_used_import(name)
-			// we replaced "." with "_dot_" in xP.mod for C variable names, do same here.
+			// We replaced "." with "_dot_" in xP.mod for C variable names do same here
 			mod = xP.import_table.resolve_alias(name).replace('.', '_dot_')
 		}
 		xP.next()
@@ -1666,7 +1746,7 @@ fn (xP mut Parser) name_expr() string {
 		// struct initialization
 		else if xP.peek() == .LCBR {
 			if ptr {
-			        name += '*'  // `&User{}` => type `User*`
+			    name += '*'  // `&User{}` => type `User*`
 			}
 			if name == 'T' {
 				name = xP.cur_gen_type
@@ -2784,10 +2864,10 @@ fn (xP mut Parser) array_init() string {
 			typ = val_typ
 			// fixed width array initialization? (`arr := [20]byte`)
 			if is_integer && xP.tk == .RSBR && xP.peek() == .NAME {
-				nextch := xP.scanner.text[xP.scanner.pos_x + 1]
+				//nextch := xP.scanner.text[xP.scanner.pos_x + 1]
 				// TODO whitespace hack
 				// Make sure there's no space in `[10]byte`
-				if !nextch.is_space() {
+				//if !nextch.is_space() {
 					xP.check(.RSBR)
 					array_elem_typ := xP.get_type()
 					if !xP.table.known_type(array_elem_typ) {
@@ -2800,7 +2880,7 @@ fn (xP mut Parser) array_init() string {
 						return '[${xP.mod}__$lit]$array_elem_typ'
 					}
 					return '[$lit]$array_elem_typ'
-				}
+				//}
 			}
 		}
 		if val_typ != typ {
@@ -3808,6 +3888,10 @@ fn (p mut Parser) check_and_register_used_imported_type(typ_name string) {
 }
 
 fn (xP mut Parser) check_unused_imports() {
+	// Don't run in the generated UTxQ file with `.str()`
+	if xP.id == 'xQGen' {
+		return
+	}
 	mut output := ''
 	for alias, mod in xP.import_table.imports {
 		if !xP.import_table.is_used_import(alias) {

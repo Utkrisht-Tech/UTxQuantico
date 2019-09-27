@@ -1010,3 +1010,15 @@ public fn (s string) bytes() []byte {
 	C.memcpy(buf.data, s.str, s.len)
 	return buf
 }
+
+// Returns a new string with a specified number of copies of the string it was called on.
+public fn (st string) repeat(count int) string {
+	if count <= 1 {
+		return st
+	}
+	ret := malloc(st.len * count + 1)
+	for _ in 0..count {
+		C.strcat(ret, st.str)
+	}
+	return string(ret)
+}

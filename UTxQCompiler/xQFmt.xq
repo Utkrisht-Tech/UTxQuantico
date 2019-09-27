@@ -6,7 +6,7 @@ module main
 
 import StringX
 
-// format helpers
+// Format helpers
 
 fn (scanner mut Scanner) fgen(s string) {
 	mut st := s
@@ -26,33 +26,35 @@ fn (scanner mut Scanner) fgenln(s string) {
 	scanner.format_line_empty = true
 }
 
-fn (xQP mut Parser) fgen(s string) {
-	xQP.scanner.fgen(s)
+fn (xP mut Parser) fgen(s string) {
+	xP.scanner.fgen(s)
 }
 
-fn (xQP mut Parser) fspace() {
-	xQP.fgen(' ')
+fn (xP mut Parser) fspace() {
+	xP.fgen(' ')
 }
 
-fn (xQP mut Parser) fgenln(s string) {
-	xQP.scanner.fgenln(s)
+fn (xP mut Parser) fgenln(s string) {
+	xP.scanner.fgenln(s)
 }
 
-fn (xQP mut Parser) peek() Token {
+/*
+fn (xP mut Parser) peek() Token {
 	for {
-		xQP.cgen.line = xQP.scanner.line_no_y + 1
-		tk := xQP.scanner.peek()
+		xP.cgen.line = xP.scanner.line_no_y + 1
+		tk := xP.scanner.peek()
 		if tk != .NEWLINE {
 			return tk
 		}
 	}
 	return .EOF  // FIX:- UTxQ doesn't know how to reach here
 }
+*/
 
-fn (xQP mut Parser) format_inc() {
-	xQP.scanner.format_indent++
+fn (xP mut Parser) format_inc() {
+	xP.scanner.format_indent++
 }
 
-fn (xQP mut Parser) format_dec() {
-	xQP.scanner.format_indent--
+fn (xP mut Parser) format_dec() {
+	xP.scanner.format_indent--
 }

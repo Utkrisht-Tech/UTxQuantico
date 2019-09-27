@@ -127,8 +127,12 @@ fn (xP mut Parser) register_var(var Var) {
 fn (xP mut Parser) clear_vars() {
 	// shared a := [1, 2, 3]
 	xP.var_idx = 0
-	xP.local_vars.free()
-	xP.local_vars = []Var
+	if xP.local_vars.len > 0 {
+		if xP.pref.autofree {
+			xP.local_vars.free()
+		}
+		xP.local_vars = []Var
+	}
 }
 
 // xQLib header file
@@ -173,10 +177,11 @@ fn (xP mut Parser) fn_decl() {
 			xP.error('invalid receiver type `$receiver_typ` (`$receiver_typ` is an interface)')
 		}
 		// Don't allow modifying types from a different module
-		if !xP.first_cp() && !xP.builtin_mod && T.mod != xP.mod {
+		if !xP.first_cp() && !xP.builtin_mod && T.mod != xP.mod && xP.id != 'xQGen' {
+			// allow .str() on builtin arrays
 			println('T.mod=$T.mod')
 			println('xP.mod=$xP.mod')
-			xP.error('cannot define new methods on non-local type `$receiver_typ`')
+			xP.error('Cannot define new methods on non-local type `$receiver_typ`')
 		}
 		// `(f *Foo)` instead of `(f mut Foo)` is a common mistake
 		//if !xP.builtin_mod && receiver_typ.contains('*') {
@@ -919,21 +924,13 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 					xP.cgen.set_shadow(sh, '${typ}_str(')
 					xP.gen(')')
 					continue
+				} else if T.cat == .struct {
+					xP.gen_struct_str(T)
+					xP.cgen.set_shadow(sh, '${typ}_str(')
+					xP.gen(')')
+					continue
 				}
 				error_msg := ('`$typ` needs to have method `str() string` to be printable')
-				if T.fields.len > 0 {
-					mut index := xP.cgen.cur_line.len - 1
-					for index > 0 && xP.cgen.cur_line[index - 1] != `(` { index-- }
-					name := xP.cgen.cur_line.right(index + 1)
-					if name == '}' {
-						xP.error(error_msg)
-					}
-					xP.cgen.resetln(xP.cgen.cur_line.left(index))
-					xP.scanner.create_type_string(T, name)
-					xP.cgen.cur_line.replace(typ, '')
-					xP.next()
-					return xP.fn_call_args(mut f)
-				}
 				xP.error(error_msg)
 			}
 			xP.cgen.set_shadow(sh, '${typ}_str(')
@@ -1029,7 +1026,6 @@ fn (xP mut Parser) fn_call_args(f mut Fn) &Fn {
 		xP.error('wrong number of arguments for fn `$f.name`: expected $f.args.len, but got more')
 	}
 	xP.check(.RPAR)
-	// xP.gen(')')
 	return f // TODO is return f right?
 }
 

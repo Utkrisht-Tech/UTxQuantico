@@ -278,6 +278,7 @@ fn os_name_to_ifdef(name string) string {
 		case 'msvc': return '_MSC_VER'
 		case 'android': return '__BIONIC__'
 		case 'js': return '_XQJS'
+		case 'solaris': return '__sun'
 	}
 	xQError('bad os ifdef name "$name"')
 	return ''
@@ -290,6 +291,7 @@ fn platform_postfix_to_ifdefguard(name string) string {
 		case '_nix.xq': return '#ifndef _WIN32'
 		case '_lin.xq': return '#ifdef __linux__'
 		case '_mac.xq': return '#ifdef __APPLE__'
+		case '_solaris.xq': return '#ifdef __sun'
   }
 	xQError('bad platform_postfix "$name"')
 	return ''

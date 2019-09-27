@@ -539,6 +539,9 @@ public fn user_os() string {
 	$if android{
 		return 'android'
 	}
+	$if solaris {
+		return 'solaris'
+	}
 	return 'unknown'
 }
 
@@ -627,6 +630,8 @@ public fn executable() string {
 		// "There is no way to get the full path of the executed file in OpenBSD."
 		return os.args[0]
 	}
+	$if solaris {
+	}
 	$if netbsd {
 		mut result := malloc(MAX_PATH)
 		count := int(C.readlink('/proc/curproc/exe', result, MAX_PATH ))
@@ -643,7 +648,7 @@ public fn executable() string {
 		}
 		return string(result, count)
 	}
-	return '.'
+	return os.args[0]
 }
 
 public fn is_dir(path string) bool {

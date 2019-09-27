@@ -7,6 +7,7 @@ module main
 import (
 	WebX.template  // for `$WebX_html()`
 	os
+	StringX
 )
 
 fn (xP mut Parser) comp_time() {
@@ -20,7 +21,7 @@ fn (xP mut Parser) comp_time() {
 		}
 		name := xP.check_name()
 		xP.fspace()
-		if name in SupportedPlatforms {
+		if name in supported_platforms {
 			ifdef_name := os_name_to_ifdef(name)
 			if not {
 				xP.genln('#ifndef $ifdef_name')
@@ -41,9 +42,9 @@ fn (xP mut Parser) comp_time() {
 			xP.genln('#endif')
 		}
 		else {
-			println('Supported platforms:')
-			println(SupportedPlatforms)
-			xP.error('unknown platform `$name`')
+			println('Supported Platforms:')
+			println(supported_platforms)
+			xP.error('Unknown platform `$name`')
 		}
 		if_returns := xP.returns
 		xP.returns = false
@@ -116,7 +117,7 @@ fn (xP mut Parser) comp_time() {
 		// Parse the function and embed resulting C code in current function so that
 		// all variables are available.
 		pos := xP.cgen.lines.len - 1
-		mut xPP := xP.xQ.new_parser('.WebXTemplate.xq')
+		mut xPP := xP.xQ.new_parser_file('.WebXTemplate.xq')
 		if !xP.pref.is_debug {
 			os.rm('.WebXTemplate.xq')
 		}
@@ -243,19 +244,45 @@ fn (xP mut Parser) gen_array_str(typ Type) {
 	if xP.typ_to_format(elm_type, 0) == '' && !xP.table.type_has_method(elm_type2, 'str') {
 		xP.error('cant print ${elm_type}[], unhandled print of ${elm_type}')
 	}
-	xP.cgen.fns << '
-	string ${typ.name}_str($typ.name a) {
-		StringX__Builder sb = StringX__new_builder(a.len * 3);
-		StringX__Builder_write(&sb, tos2("[")) ;
-		for (int i = 0; i < a.len; i++) {
-			StringX__Builder_write(&sb, ${elm_type}_str( (($elm_type *) a.data)[i]));
-
-			if (i < a.len - 1) {
-			StringX__Builder_write(&sb, tos2(", ")) ;
-
-			}
+	xP.xQ.xQGen_buf.writeln('
+fn (a $typ.name) str() string {
+	mut sb := StringX.new_builder(a.len * 3)
+	sb.write("[")
+	for i, elem in a {
+		sb.write(elem.str())
+		if i < a.len - 1 {
+			sb.write(", ")
 		}
-		StringX__Builder_write(&sb, tos2("]")) ;
-		return StringX__Builder_str(sb);
-	} '
+	}
+	sb.write("]")
+	return sb.str()
+}
+	')
+	xP.cgen.fns << 'string ${typ.name}_str();'
+}
+
+// `Foo { bar: 3, baz: 'hi' }` => '{ bar: 3, baz: "hi" }'
+fn (xP mut Parser) gen_struct_str(typ Type) {
+	xP.add_method(typ.name, Fn{
+		name: 'str'
+		typ: 'string'
+		args: [Var{typ: typ.name, is_arg:true}]
+		is_method: true
+		is_public: true
+		receiver_typ: typ.name
+	})
+
+	mut sb := StringX.new_builder(typ.fields.len * 20)
+	sb.writeln('fn (a $typ.name) str() string {\nreturn')
+	sb.writeln("'{")
+	for field in typ.fields {
+		sb.writeln('\t$field.name: \$a.${field.name}')
+	}
+	sb.writeln("\n}'")
+	sb.writeln('}')
+	xP.xQ.xQGen_buf.writeln(sb.str())
+	// Need to manually add the definition to `fns` so that it stays
+	// at the top of the file.
+	// This function will get parsed by UTxQ after the main CheckPoint.
+	xP.cgen.fns << 'string ${typ.name}_str();'
 }

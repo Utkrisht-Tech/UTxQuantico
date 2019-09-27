@@ -455,3 +455,9 @@ fn testXustring_count() {
 	assert (a.count('ﷰ'.ustring())) == 2
 	assert (a.count('a'.ustring())) == 0
 }
+
+
+fn testXrepeat() {
+	s := 'UTxQ! '
+	assert s.repeat(5) == 'UTxQ! UTxQ! UTxQ! UTxQ! UTxQ! '
+}

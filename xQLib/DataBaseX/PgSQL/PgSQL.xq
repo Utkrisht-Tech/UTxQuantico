@@ -107,14 +107,14 @@ public fn (db DB) exec(query string) []PgSQL.Row {
 	return res_to_rows(res)
 }
 
-fn rows_first_or_empty(rows []PgSQL.Row) PgSQL.Row? {
+fn rows_first_or_empty(rows []PgSQL.Row) ?PgSQL.Row {
 	if rows.len == 0 {
 		return error('no row')
 	} 
 	return rows[0]
 }
             
-public fn (db DB) exec_one(query string) PgSQL.Row? {
+public fn (db DB) exec_one(query string) ?PgSQL.Row {
 	res := C.PQexec(db.conn, query.str)
 	e := string(C.PQerrorMessage(db.conn))
 	if e != '' {

@@ -7,6 +7,7 @@ module HttpX
 #flag windows -I @XQROOT/thirdParty/vschannel
 #flag -l ws2_32
 #flag -l crypt32
+#flag -l secur32
  
 #include "vschannel.c"
 
@@ -21,7 +22,7 @@ fn (req &Request) ssl_do(port int, method, host_name, path string) Response {
 	mut buff := malloc(C.vsc_init_resp_buff_size)
 	addr := host_name
 	sdata := req.build_request_headers(method, host_name, path)
-	length := int(C.request(&ctx, port, addr.str, sdata.str, &buff))
+	length := int(C.request(&ctx, port, addr.to_wide(), sdata.str, &buff))
 
 	C.vschannel_cleanup(&ctx)
 	return parse_response(string(buff, length))

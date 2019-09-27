@@ -3,7 +3,7 @@
 // that can be found in the LICENSE file.
 
 // import NetX.urllib
-// import HttpX
+import HttpX
 
 fn testXescape_unescape() {
 /*
@@ -16,15 +16,11 @@ fn testXescape_unescape() {
 }
 
 fn testXHttpXget() {
-/*
-	$if windows { return }
-	assert http.get_text('https://UTxQuantico.io/version') == '0.1'
-	println('http ok')
-*/
+	assert HttpX.get_text('https://UTxQuantico.io/version') == '0.1'
+	println('HttpX ok')
 }
 
 fn testXHttpXget_from_UTxQ_utc_now() {
-	/*
 	urls := ['http://UTxQuantico.io/utc_now', 'https://UTxQuantico.io/utc_now']
 	for url in urls {
 		println('Test getting current time from $url by HttpX.get')
@@ -34,11 +30,9 @@ fn testXHttpXget_from_UTxQ_utc_now() {
 		assert res.text.int() > 1566403696
 		println('Current time is: ${res.text.int()}')
 	}
-	*/
 }
 
 fn testXpublic_servers() {
-	/*
 	urls := [
 		'http://github.com/robots.txt',
 		'http://google.com/robots.txt',
@@ -53,5 +47,4 @@ fn testXpublic_servers() {
 		assert 200 == res.status_code
 		assert res.text.len > 0
 	}
-	*/
 }

@@ -71,11 +71,26 @@ fn (xQ mut UTxQ) XCompiler() {
 		xQ.out_name = ModPath + xQ.dir + '.o' //xQ.out_name
 		println('Building ${xQ.out_name}...')
 	}
+
+	mut debug_options := '-g'
+	mut optimization_options := '-O2'
+	if xQ.pref.ccompiler.contains('clang') {
+		if xQ.pref.is_debug {
+			debug_options = '-g -O0'
+		}
+		optimization_options = '-O3 -flto'
+	}
+	if xQ.pref.ccompiler.contains('gcc') {
+		if xQ.pref.is_debug {
+			debug_options = '-g3'
+		}
+		optimization_options = '-O3 -fno-strict-aliasing -flto'
+	}
 	if xQ.pref.is_prod {
-		a << '-O2'
+		a << optimization_options
 	}
 	else {
-		a << '-g'
+		a << debug_options
 	}
 
 	if xQ.pref.is_debug && os.user_os() != 'windows'{
@@ -157,7 +172,7 @@ fn (xQ mut UTxQ) XCompiler() {
 	// Without these libs compilation will fail on Linux
 	// || os.user_os() == 'linux'
 	if xQ.pref.build_mode != .build_module && (xQ.os == .linux || xQ.os == .freebsd || xQ.os == .openbsd ||
-		xQ.os == .netbsd || xQ.os == .dragonfly) {
+		xQ.os == .netbsd || xQ.os == .dragonfly || xQ.os == .solaris) {
 		a << '-lm -lpthread '
 		// -ldl is a Linux only thing. BSDs have it in libc.
 		if xQ.os == .linux {

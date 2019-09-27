@@ -180,9 +180,11 @@ public fn (s Socket) connect(address string, port int) ?int {
 	hints.ai_family = C.AF_UNSPEC
 	hints.ai_socktype = C.SOCK_STREAM
 	hints.ai_flags = C.AI_PASSIVE
+	hints.ai_protocol = 0
 	hints.ai_addrlen = 0
 	hints.ai_canonname = C.NULL
 	hints.ai_addr = C.NULL
+	hints.ai_next = C.NULL
 
 	info := &C.addrinfo{!}
 	sport := '$port'
