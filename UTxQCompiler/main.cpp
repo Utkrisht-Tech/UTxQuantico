@@ -1,14 +1,13 @@
-#include "Grammer/tokens.cpp"
-#include <iostream>
-#include <bits/stdc++.h>
-
-
-using namespace std;
-
+#include "xQGrammer/xQGrammer.cpp"
 int main(){
-    char tk;
-    cin>>tk;
-    string ans = (tk==Grammer::COLON) ? "COLON":"UNKNOWN";
-    cout<<ans<<"\n";
+    //init();
+    //for(auto x:keywords){
+    //    cout<<x.first<<" "<<x.second<<"\n";
+    //}
+    Position pos;
+    pos.fileName = "UTXQ";
+    pos.line = 10;
+    pos.column = 5;
+    cout<<pos.posToString();
     return 0;
 }
