@@ -114,11 +114,12 @@ typedef struct {
         mtx.unlock();
         return val;
     }
+    //
     // addLine(): Adds line offset for a new line.
     // line offset (> previous_line_offset and < file_size).
     // Else the line offset is ignored.
     //
-    void addLine(int offset) {
+    void addLine(int offset){
         mtx.lock();
         int l = lines.size();
         if((l == 0 || lines[l-1] < offset) && (offset < size)){
@@ -126,20 +127,21 @@ typedef struct {
         }
         mtx.unlock();
     }
+    //
     // mergeLine(): Merges a line with the following line and replaces
     // the newline char ('\n') with a space ('\0'). To obtain the line
     // number, consult e.g. Position.line. mergeLine() will panic if 
     // invalid line number is given.
     //
-    void mergeLine(int line) {
+    void mergeLine(int line){
         if(line<1){
-            cerr<<"Invalid line number: Must be greater than 0\n";
+            cerr<<"Invalid line number: Must be greater than 0\n"; // TODO:- Implement panic()
             return;
         }
         mtx.lock();
         int len=lines.size();
 	    if(line>=len){
-            cerr<<"!!Invalid line number!!\n";
+            cerr<<"!!Invalid line number!!\n"; // TODO:- Implement panic()
             mtx.unlock(); return;
         }
 	    // To merge the line <l> with the line <l+1>, we need to remove
@@ -150,4 +152,116 @@ typedef struct {
         lines.pop_back();
         mtx.unlock(); return;
     }
+    //
+    // setLines(): Sets the line offsets for a file and returns true on success.
+    // The line offsets are the offsets of the first character of each line;
+    // Eg:- for the line "ab\nc\n" the line offsets are {0, 3}.
+    // An empty file has an empty line offset table.
+    // Each line offset (> the offset for the previous line) and (< file size);
+    // else setLines() fails and returns false.
+    // Callers must not mutate the provided slice after setLines() returns.
+    //
+    bool setLines(vector<int> Lines){
+        // Verify validity of Lines table
+        for(int i=0;i<Lines.size();i++){
+		    if((i>0 && Lines[i] <= Lines[i-1]) || (size <= Lines[i])){
+			    return false;
+		    }
+	    }
+        // Set lines table
+        mtx.lock();
+        lines = Lines;
+        mtx.unlock();
+        return true;
+    }
+    //
+    // setLinesForContent(): Sets the line offsets for the given file content.
+    // Ignores position-altering //line comments.
+    //
+    void setLinesForContent(vector<unsigned char> content){
+        vector<int> Lines; int line = 0;
+        for(int offset=0;offset<content.size();offset++){
+            if(line >= 0) {
+                Lines.push_back(line);
+            }
+            line = -1;
+            if(content[offset]=='\n'){
+                line = offset + 1;
+            }
+        }
+        // Set lines table
+        mtx.lock();
+        lines = Lines;
+        mtx.unlock();
+    }
+    //
+    // lineStart(): Returns Pos value of start of a specified line.
+    // Ignores any alternative positions set using addLineColumnInfo.
+    // lineStart() panics if the 1-based line number is invalid.
+    //
+    Pos lineStart(int line){
+        if(line<1){
+            cerr<<"Invalid line number: Line numbering starts from 1\n"; // TODO:- Implement panic()
+            return -1;
+        }
+        mtx.lock();
+        if(line>lines.size()){
+            cerr<<"Invalid line number\n"; // TODO:- Implement panic()
+            mtx.unlock(); return -1;
+        }
+        mtx.unlock();
+        return ((Pos) base + lines[line-1]);
+    }
+    //
+    // addLineColumnInfo(): Adds alternative file, line, and column number
+    // info for a given file offset. The offset must be (> offset for the
+    // previously added alternative line info) and (< file size); Else info
+    // is ignored.
+    // addLineColumnInfo(): Used to register alternative position info for
+    // line directives such as //line filename:line:column.
+    //
+    void addLineColumnInfo(int offset, string filename, int line, int column) {
+        mtx.lock();
+        int i = infos.size();
+        if((i==0) || (infos[i-1].offset<offset && offset<size)){
+            lineInfo lI;
+            lI.offset=offset; lI.fileName=filename; lI.line=line; lI.column=column;
+            infos.push_back(lI);
+        }
+        mtx.unlock();
+    }
+    //
+    // addLineInfo(): Calls addLineColumnInfo with column = 1.
+    //
+    void addLineInfo(int offset, string filename, int line){
+        addLineColumnInfo(offset, filename, line, 1);
+    }
+    //
+    // TODO:- FIX THIS IMPORTANT
+    // Just Declare
+    //int PoS(int offset);
+    //
+    // offSet(): Returns the offset for a given file position p;
+    // p must be a valid Pos value in that file.
+    // Eg:- offSet(PoS(offset)) == offset.
+    //
+    int offSet(Pos p){
+        if((int(p)<base) || (int(p)>base+size)){
+            cerr<<"Invalid Pos value\n"; // TODO:- Implement panic()
+            return -1;
+        }
+        return (int(p)-base);
+    }
+    //
+    // PoS(): Returns the Pos value for the given file offset;
+    // the offset must be <= size. Eg:- PoS(offSet(p)) == p.
+    //
+    Pos PoS(int offset){
+        if(offset>size){
+            cerr<<"Invalid file offset\n"; // TODO:- Implement panic()
+            return -1;
+        }
+        return ((Pos)(base + offset));
+    }
+    
 } File;
