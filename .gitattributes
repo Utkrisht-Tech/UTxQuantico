@@ -1,2 +1,3 @@
 *.xq linguist-language=UTxQ
-*.cpp linguist-language=C++
+*.c linguist-language=C
+*.h linguist-language=C-Headers
